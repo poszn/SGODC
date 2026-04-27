@@ -13,6 +13,7 @@ const DB = {
     ADVANCES:     'sgdc_advances',
     NOTIFICATIONS:'sgdc_notifications',
     SESSION:      'sgdc_session',
+    FORNECEDORES: 'sgdc_fornecedores',
   },
 
   _get(key)       { try { return JSON.parse(localStorage.getItem(key)) || []; } catch { return []; } },
@@ -86,6 +87,21 @@ const DB = {
     if (idx >= 0) list[idx] = adv; else list.push(adv);
     this._set(this.KEYS.ADVANCES, list);
     return adv;
+  },
+
+  // ── FORNECEDORES ──
+  getFornecedores()              { return this._get(this.KEYS.FORNECEDORES); },
+  getFornecedoresByCompany(cid)  { return this.getFornecedores().filter(f => f.companyId === cid); },
+  getFornecedor(id)              { return this.getFornecedores().find(f => f.id === id) || null; },
+  saveFornecedor(f) {
+    const list = this.getFornecedores();
+    const idx  = list.findIndex(x => x.id === f.id);
+    if (idx >= 0) list[idx] = f; else list.push(f);
+    this._set(this.KEYS.FORNECEDORES, list);
+    return f;
+  },
+  deleteFornecedor(id) {
+    this._set(this.KEYS.FORNECEDORES, this.getFornecedores().filter(f => f.id !== id));
   },
 
   // ── NOTIFICATIONS ──

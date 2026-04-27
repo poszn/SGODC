@@ -1704,3 +1704,173 @@ select {
 @media (max-width: 480px) {
   .divididas-grid { grid-template-columns: 1fr; }
 }
+
+/* ══════════════════════════════════════════════
+   FORNECEDORES — Pesquisa inline no formulário
+══════════════════════════════════════════════ */
+.forn-dropdown {
+  position: absolute;
+  top: 100%; left: 0; right: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  z-index: 200;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.forn-dd-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  transition: background .15s;
+}
+.forn-dd-item:last-child { border-bottom: none; }
+.forn-dd-item:hover { background: var(--primary-light); }
+.forn-dd-nome { font-weight: 600; font-size: 14px; color: var(--text-primary); }
+.forn-dd-meta { font-size: 12px; color: var(--text-secondary); }
+.forn-dd-empty { color: var(--text-muted); font-style: italic; cursor: default; }
+.forn-dd-empty:hover { background: none; }
+
+/* Card do fornecedor seleccionado */
+.forn-card {
+  background: var(--primary-light);
+  border: 1.5px solid var(--primary-mid);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.forn-card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.forn-card-nome {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--primary);
+}
+.forn-card-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+/* Página de Fornecedores */
+.forn-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+.forn-page-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.forn-page-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.forn-page-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+.forn-page-info { flex: 1; }
+.forn-page-nome {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+.forn-page-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+.forn-pag-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.forn-pag-badge.pronto {
+  background: var(--success-light);
+  color: #065f46;
+}
+.forn-pag-badge.credito {
+  background: var(--warning-light);
+  color: #92400e;
+}
+.forn-page-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.forn-page-obs {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+.forn-page-actions {
+  display: flex;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+/* ══════════════════════════════════════════════
+   IVA / FATURAÇÃO — Banner de cálculo
+══════════════════════════════════════════════ */
+.iva-banner {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1.5px solid #bae6fd;
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  margin: 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.iva-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.iva-row span:last-child {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.iva-total {
+  border-top: 1px solid #bae6fd;
+  padding-top: 8px;
+  margin-top: 4px;
+}
+.iva-total span {
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  color: var(--primary) !important;
+}
+
+@media (max-width: 600px) {
+  .forn-grid { grid-template-columns: 1fr; }
+}

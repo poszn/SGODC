@@ -74,6 +74,7 @@ function showPage(id) {
     case 'page-config':        renderConfig();             break;
     case 'page-tendencias':    renderTendencias();         break;
     case 'page-divididas':     renderDespesasDivididas();  break;
+    case 'page-fornecedores':  renderFornecedores();       break;
   }
 }
 
@@ -1162,7 +1163,10 @@ function submitCampo(status) {
     showToast('Preencha os campos obrigatórios (*)', 'error'); return;
   }
 
-  const total     = pessoas * (isNaN(valPessoa) ? 0 : valPessoa);
+  const subtotal  = pessoas * (isNaN(valPessoa) ? 0 : valPessoa);
+  const ivaInfo   = _getIVAInfo?.() || { comIVA: false, taxa: 16, regime: 'normal' };
+  const ivaValor  = ivaInfo.comIVA ? subtotal * (ivaInfo.taxa / 100) : 0;
+  const total     = subtotal + ivaValor;
   const payMethod = document.getElementById('campo-pay-method')?.value || 'cash';
   const phoneNum  = document.getElementById('campo-phone')?.value.trim() || '';
   const recInput  = document.getElementById('campo-recibo');
@@ -1170,6 +1174,13 @@ function submitCampo(status) {
   const kmEl      = document.getElementById('campo-km');
   const km        = kmEl && kmEl.value ? parseFloat(kmEl.value) : null;
   const approvals = _buildApprovalChain(status);
+
+  // Fornecedor
+  const forn = _saveFornecedorInline?.() || null;
+
+  // Documento fiscal
+  const docTipo = document.getElementById('campo-doc-tipo')?.value || 'fatura';
+  const docNum  = document.getElementById('campo-doc-num')?.value.trim() || _gerarNumDoc(docTipo);
 
   const exp = {
     id: DB.uid(), companyId: currentCompany.id, userId: currentUser.id,
@@ -1189,6 +1200,15 @@ function submitCampo(status) {
     receiptData,
     approvals,
     submittedAt: status === 'pending' ? inicio : null,
+    // Fornecedor
+    fornecedor: forn ? { id: forn.id, nome: forn.nome, nuit: forn.nuit, tipo: forn.tipo, modalidade: forn.modalidade } : null,
+    // Faturação / IVA
+    docTipo, docNum,
+    ivaAplicado: ivaInfo.comIVA,
+    ivaTaxa:     ivaInfo.taxa,
+    ivaRegime:   ivaInfo.regime,
+    subtotal,
+    ivaValor,
   };
   DB.saveExpense(exp);
 
@@ -1231,11 +1251,15 @@ function clearCampoForm() {
 
 // ── CAMPO CALC ──
 function calcCampoTotal() {
-  const n   = parseInt(document.getElementById('campo-pessoas').value) || 1;
-  const v   = parseFloat(document.getElementById('campo-valor-pessoa').value) || 0;
-  const cur = document.getElementById('campo-moeda').value;
-  document.getElementById('campo-total-display').textContent = fmtCurrency(n*v, cur);
+  const n        = parseInt(document.getElementById('campo-pessoas').value) || 1;
+  const v        = parseFloat(document.getElementById('campo-valor-pessoa').value) || 0;
+  const cur      = document.getElementById('campo-moeda')?.value || 'MZN';
+  const subtotal = n * v;
+  document.getElementById('campo-total-display').textContent = fmtCurrency(subtotal, cur);
   document.getElementById('campo-formula').textContent = `${n} pessoa${n>1?'s':''} × ${fmtCurrency(v, cur)}`;
+  // Actualizar banner IVA
+  const { comIVA } = _getIVAInfo?.() || { comIVA: false };
+  if (comIVA) _updateIVABanner?.(subtotal, cur);
 }
 function updateCampoMoeda() {
   const cur = document.getElementById('campo-moeda').value;
@@ -1928,6 +1952,235 @@ function sendScheduledReport() {
   showToast('Relatório enviado! ✅', 'success');
 }
 
+// ══════════════════════════════════════════════
+// ── FORNECEDORES ──
+// ══════════════════════════════════════════════
+const FORN_TIPO_LABEL = {
+  hotel:'🏨 Hotel/Alojamento', restaurante:'🍽️ Restaurante',
+  transporte:'🚗 Transportadora', comunicacao:'📞 Comunicações', outro:'⚙️ Outro'
+};
+const FORN_PAG_LABEL = { pronto:'💵 Pronto Pagamento', credito:'🏦 A Prazo (Crédito)' };
+
+function renderFornecedores() {
+  if (!currentCompany) return;
+  const q     = (document.getElementById('forn-search-page')?.value || '').toLowerCase();
+  const tipo  = document.getElementById('forn-filter-tipo')?.value || '';
+  const pag   = document.getElementById('forn-filter-pag')?.value  || '';
+  let list    = DB.getFornecedoresByCompany(currentCompany.id);
+
+  if (q)    list = list.filter(f => (f.nome+f.nuit+f.contacto).toLowerCase().includes(q));
+  if (tipo) list = list.filter(f => f.tipo === tipo);
+  if (pag)  list = list.filter(f => f.modalidade === pag);
+
+  // Stats
+  const statsEl = document.getElementById('forn-stats');
+  if (statsEl) {
+    const all = DB.getFornecedoresByCompany(currentCompany.id);
+    const credito = all.filter(f=>f.modalidade==='credito').length;
+    statsEl.innerHTML = `
+      <div class="stat-card"><div class="stat-value">${all.length}</div><div class="stat-label">Total Fornecedores</div></div>
+      <div class="stat-card"><div class="stat-value">${all.filter(f=>f.tipo==='hotel').length}</div><div class="stat-label">Hotéis/Alojamento</div></div>
+      <div class="stat-card"><div class="stat-value">${all.filter(f=>f.tipo==='restaurante').length}</div><div class="stat-label">Restaurantes</div></div>
+      <div class="stat-card"><div class="stat-value" style="color:var(--warning)">${credito}</div><div class="stat-label">A Prazo/Crédito</div></div>`;
+  }
+
+  const container = document.getElementById('forn-list-container');
+  if (!container) return;
+  if (list.length === 0) {
+    container.innerHTML = '<p class="empty-state">Nenhum fornecedor encontrado.</p>'; return;
+  }
+  container.innerHTML = `<div class="forn-grid">${list.map(f => `
+    <div class="forn-page-card">
+      <div class="forn-page-card-head">
+        <div class="forn-page-icon">${FORN_TIPO_LABEL[f.tipo]?.charAt(0) || '🏢'}</div>
+        <div class="forn-page-info">
+          <div class="forn-page-nome">${f.nome}</div>
+          <div class="forn-page-meta">${FORN_TIPO_LABEL[f.tipo]||f.tipo}</div>
+        </div>
+        <span class="forn-pag-badge ${f.modalidade}">${FORN_PAG_LABEL[f.modalidade]||f.modalidade}</span>
+      </div>
+      <div class="forn-page-details">
+        ${f.nuit ? `<span>🔢 NUIT: <strong>${f.nuit}</strong></span>` : ''}
+        ${f.contacto ? `<span>📞 ${f.contacto}</span>` : ''}
+        ${f.endereco ? `<span>📍 ${f.endereco}</span>` : ''}
+      </div>
+      ${f.obs ? `<div class="forn-page-obs">${f.obs}</div>` : ''}
+      <div class="forn-page-actions">
+        <button class="btn btn-sm btn-outline" onclick="openFornecedorModal('${f.id}')">✏️ Editar</button>
+        <button class="btn btn-sm btn-outline" style="color:var(--danger)" onclick="deleteFornecedorPage('${f.id}')">🗑️ Remover</button>
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+function openFornecedorModal(id) {
+  const f = id ? DB.getFornecedor(id) : null;
+  document.getElementById('modal-forn-title').textContent = f ? 'Editar Fornecedor' : 'Novo Fornecedor';
+  document.getElementById('modal-forn-id').value       = f?.id || '';
+  document.getElementById('modal-forn-nome').value     = f?.nome || '';
+  document.getElementById('modal-forn-nuit').value     = f?.nuit || '';
+  document.getElementById('modal-forn-endereco').value = f?.endereco || '';
+  document.getElementById('modal-forn-contacto').value = f?.contacto || '';
+  document.getElementById('modal-forn-tipo').value     = f?.tipo || 'hotel';
+  document.getElementById('modal-forn-pag').value      = f?.modalidade || 'pronto';
+  document.getElementById('modal-forn-rodape').value   = f?.rodape || '';
+  document.getElementById('modal-forn-obs').value      = f?.obs || '';
+  openModal('modal-fornecedor');
+}
+
+function saveFornecedorModal() {
+  const nome = document.getElementById('modal-forn-nome').value.trim();
+  if (!nome) { showToast('Nome do fornecedor obrigatório', 'error'); return; }
+  const id = document.getElementById('modal-forn-id').value || DB.uid();
+  DB.saveFornecedor({
+    id, companyId: currentCompany.id,
+    nome,
+    nuit:      document.getElementById('modal-forn-nuit').value.trim(),
+    endereco:  document.getElementById('modal-forn-endereco').value.trim(),
+    contacto:  document.getElementById('modal-forn-contacto').value.trim(),
+    tipo:      document.getElementById('modal-forn-tipo').value,
+    modalidade:document.getElementById('modal-forn-pag').value,
+    rodape:    document.getElementById('modal-forn-rodape').value.trim(),
+    obs:       document.getElementById('modal-forn-obs').value.trim(),
+    criadoEm:  new Date().toISOString(),
+  });
+  closeModal('modal-fornecedor');
+  renderFornecedores();
+  showToast('Fornecedor guardado ✅', 'success');
+}
+
+function deleteFornecedorPage(id) {
+  if (!confirm('Remover este fornecedor?')) return;
+  DB.deleteFornecedor(id);
+  renderFornecedores();
+  showToast('Fornecedor removido', 'info');
+}
+
+// ── Fornecedor inline no formulário de campo ──
+let _fornSelecionado = null;
+
+function searchFornecedor(q) {
+  const dd = document.getElementById('campo-forn-dropdown');
+  if (!dd || !currentCompany) return;
+  if (!q || q.length < 2) { dd.classList.add('hidden'); return; }
+  const list = DB.getFornecedoresByCompany(currentCompany.id)
+    .filter(f => (f.nome+f.nuit+f.contacto).toLowerCase().includes(q.toLowerCase()))
+    .slice(0, 6);
+  if (list.length === 0) {
+    dd.innerHTML = '<div class="forn-dd-item forn-dd-empty">Nenhum resultado — adicione abaixo</div>';
+  } else {
+    dd.innerHTML = list.map(f => `
+      <div class="forn-dd-item" onclick="selectFornecedor('${f.id}')">
+        <span class="forn-dd-nome">${f.nome}</span>
+        <span class="forn-dd-meta">${FORN_TIPO_LABEL[f.tipo]||''} · ${FORN_PAG_LABEL[f.modalidade]||''}</span>
+      </div>`).join('');
+  }
+  dd.classList.remove('hidden');
+}
+
+function selectFornecedor(id) {
+  const f = DB.getFornecedor(id);
+  if (!f) return;
+  _fornSelecionado = f;
+  document.getElementById('campo-forn-search').value = '';
+  document.getElementById('campo-forn-dropdown').classList.add('hidden');
+  document.getElementById('campo-forn-nome-disp').textContent = f.nome;
+  document.getElementById('campo-forn-nuit-disp').textContent = f.nuit ? `NUIT: ${f.nuit}` : '';
+  document.getElementById('campo-forn-tipo-disp').textContent = FORN_TIPO_LABEL[f.tipo] || '';
+  document.getElementById('campo-forn-pag-disp').textContent  = FORN_PAG_LABEL[f.modalidade] || '';
+  document.getElementById('campo-forn-selected').classList.remove('hidden');
+  // Ocultar form de novo fornecedor se estiver aberto
+  document.getElementById('campo-forn-novo-wrap')?.classList.add('hidden');
+  document.getElementById('btn-toggle-forn').textContent = '+ Adicionar Novo Fornecedor';
+}
+
+function clearFornecedor() {
+  _fornSelecionado = null;
+  document.getElementById('campo-forn-search').value = '';
+  document.getElementById('campo-forn-selected').classList.add('hidden');
+}
+
+function toggleNovoFornecedor() {
+  const wrap = document.getElementById('campo-forn-novo-wrap');
+  const btn  = document.getElementById('btn-toggle-forn');
+  if (!wrap) return;
+  const showing = !wrap.classList.contains('hidden');
+  wrap.classList.toggle('hidden', showing);
+  btn.textContent = showing ? '+ Adicionar Novo Fornecedor' : '− Cancelar';
+}
+
+// ══════════════════════════════════════════════
+// ── IVA / FATURAÇÃO (Moçambique – 16%) ──
+// ══════════════════════════════════════════════
+function onIVAChange() {
+  const comIVA = document.querySelector('input[name="campo-iva"]:checked')?.value === 'sim';
+  document.getElementById('campo-iva-taxa-wrap')?.classList.toggle('hidden', !comIVA);
+  document.getElementById('campo-iva-regime-wrap')?.classList.toggle('hidden', !comIVA);
+  document.getElementById('campo-iva-banner')?.classList.toggle('hidden', !comIVA);
+  calcCampoTotal();
+}
+
+function _getIVAInfo() {
+  const comIVA = document.querySelector('input[name="campo-iva"]:checked')?.value === 'sim';
+  const taxa   = parseFloat(document.getElementById('campo-iva-taxa')?.value || '16') || 16;
+  const regime = document.getElementById('campo-iva-regime')?.value || 'normal';
+  return { comIVA, taxa, regime };
+}
+
+function _updateIVABanner(subtotal, moeda) {
+  const { comIVA, taxa } = _getIVAInfo();
+  if (!comIVA) return;
+  const ivaVal = subtotal * (taxa / 100);
+  const total  = subtotal + ivaVal;
+  document.getElementById('campo-iva-pct-label').textContent  = taxa;
+  document.getElementById('campo-subtotal-disp').textContent  = fmtCurrency(subtotal, moeda);
+  document.getElementById('campo-iva-valor-disp').textContent = fmtCurrency(ivaVal, moeda);
+  document.getElementById('campo-total-iva-disp').textContent = fmtCurrency(total, moeda);
+}
+
+// ── Guardar fornecedor inline ao submeter ──
+function _saveFornecedorInline() {
+  if (_fornSelecionado) return _fornSelecionado;
+  const nome = document.getElementById('campo-forn-nome')?.value.trim();
+  if (!nome) return null;
+  const guardar = document.getElementById('campo-forn-guardar')?.checked;
+  const f = {
+    id: DB.uid(), companyId: currentCompany.id,
+    nome,
+    nuit:      document.getElementById('campo-forn-nuit')?.value.trim() || '',
+    contacto:  document.getElementById('campo-forn-contacto')?.value.trim() || '',
+    tipo:      document.getElementById('campo-forn-tipo')?.value || 'outro',
+    modalidade:document.querySelector('input[name="campo-forn-pag"]:checked')?.value || 'pronto',
+    criadoEm:  new Date().toISOString(),
+  };
+  if (guardar) DB.saveFornecedor(f);
+  return f;
+}
+
+// ── Número de documento automático ──
+function _gerarNumDoc(tipo) {
+  const prefix = tipo === 'fatura' ? 'FAT' : tipo === 'recibo' ? 'REC' : 'FR';
+  const year   = new Date().getFullYear();
+  const seq    = String(Math.floor(Math.random()*9000)+1000);
+  return `${prefix}-${year}-${seq}`;
+}
+
+// ── Auto-gerar nº documento ao mudar tipo ──
+document.addEventListener('DOMContentLoaded', () => {
+  const docTipo = document.getElementById('campo-doc-tipo');
+  if (docTipo) {
+    docTipo.addEventListener('change', () => {
+      const numEl = document.getElementById('campo-doc-num');
+      if (numEl && !numEl.value) numEl.value = _gerarNumDoc(docTipo.value);
+    });
+    // gerar na carga inicial
+    setTimeout(() => {
+      const numEl = document.getElementById('campo-doc-num');
+      if (numEl && !numEl.value) numEl.value = _gerarNumDoc(docTipo.value);
+    }, 500);
+  }
+});
+
+// ══════════════════════════════════════════════
 // ── ADIANTAMENTOS (removido) ──
 function renderAdiantamentos() { /* funcionalidade removida */ }
 function openNewAdvanceModal()  { /* removido */ }
