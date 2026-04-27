@@ -69,7 +69,6 @@ function showPage(id) {
     case 'page-planeamento':   renderPlaneamento();        break;
     case 'page-utilizadores':  renderUtilizadores();       break;
     case 'page-perfil':        renderPerfil();             break;
-    case 'page-adiantamentos': renderAdiantamentos();      break;
     case 'page-fraude':        renderFraudePage();         break;
     case 'page-notificacoes':  renderNotificacoes();       break;
     case 'page-config':        renderConfig();             break;
@@ -163,9 +162,53 @@ function loginAs(user) {
   showScreen('screen-app');
   showPage('page-dashboard');
   updateBadges();
+  _loadCompanyLogo();
 
   // Check scheduled reports (non-blocking)
   setTimeout(() => checkScheduledReports(currentCompany?.id), 1500);
+}
+
+// ── LOGÓTIPO DA EMPRESA ──
+function _loadCompanyLogo() {
+  if (!currentCompany) return;
+  const key  = `company_logo_${currentCompany.id}`;
+  const logo = localStorage.getItem(key);
+  const img  = document.getElementById('sidebar-logo-img');
+  const ltr  = document.getElementById('sidebar-brand-letter');
+  if (logo && img && ltr) {
+    img.src = logo;
+    img.classList.remove('hidden');
+    ltr.classList.add('hidden');
+  } else if (img && ltr) {
+    img.classList.add('hidden');
+    ltr.classList.remove('hidden');
+    ltr.textContent = (currentCompany.name || 'S').charAt(0).toUpperCase();
+  }
+  // Só admin pode clicar para mudar o logo
+  const wrap = document.getElementById('sidebar-logo-wrap');
+  if (wrap) wrap.style.cursor = currentUser?.role === 'admin' ? 'pointer' : 'default';
+}
+
+function triggerLogoUpload() {
+  if (currentUser?.role !== 'admin') return;
+  document.getElementById('logo-file-input')?.click();
+}
+
+function onLogoFileChange(input) {
+  const file = input.files?.[0];
+  if (!file || !currentCompany) return;
+  if (file.size > 2 * 1024 * 1024) {
+    showToast('Imagem muito grande. Máximo 2 MB.', 'error'); return;
+  }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const data = e.target.result;
+    localStorage.setItem(`company_logo_${currentCompany.id}`, data);
+    _loadCompanyLogo();
+    showToast('Logótipo actualizado! 🖼️', 'success');
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
 }
 
 function doLogout() {
@@ -1885,186 +1928,14 @@ function sendScheduledReport() {
   showToast('Relatório enviado! ✅', 'success');
 }
 
-// ── ADIANTAMENTOS ──
-function renderAdiantamentos() {
-  if (!currentCompany) return;
-  const advances = currentUser.role === 'funcionario'
-    ? DB.getAdvancesByUser(currentUser.id)
-    : DB.getAdvancesByCompany(currentCompany.id);
-  advances.sort((a,b) => (b.requestedAt||'').localeCompare(a.requestedAt||''));
-
-  const container = document.getElementById('adv-list');
-  if (!container) return;
-  if (advances.length === 0) {
-    container.innerHTML = '<p class="empty-state">Nenhum adiantamento registado.</p>'; return;
-  }
-  const currency = currentCompany.currency || 'MZN';
-  container.innerHTML = advances.map(a => {
-    const requester = DB.getUser(a.requestedBy);
-    const pct = a.amount > 0 ? Math.round((a.totalUsed||0) / a.amount * 100) : 0;
-    const statusCls = {pending:'pending',approved:'approved',disbursed:'info',reconciled:'done'}[a.status]||'';
-    const statusTxt = {pending:'⏳ Pendente',approved:'✅ Aprovado',disbursed:'💸 Desembolsado',reconciled:'🔒 Reconciliado'}[a.status]||a.status;
-    return `<div class="adv-card" onclick="openAdvanceDetail('${a.id}')">
-      <div class="adv-card-header">
-        <div>
-          <div class="adv-card-title">${a.purpose}</div>
-          <div class="adv-card-meta">${requester?.name||'—'} · ${fmtDate(a.requestedAt)} · ${payMethodLabel(a.paymentMethod)} · ${a.projeto||'—'}</div>
-        </div>
-        <span class="status-badge ${statusCls}">${statusTxt}</span>
-      </div>
-      <div class="adv-amounts">
-        <div><span class="adv-label">Solicitado</span><strong>${fmtCurrency(a.amount, currency)}</strong></div>
-        <div><span class="adv-label">Utilizado</span><strong>${fmtCurrency(a.totalUsed||0, currency)}</strong></div>
-        <div><span class="adv-label">Restante</span><strong>${fmtCurrency(a.remaining??a.amount, currency)}</strong></div>
-      </div>
-      <div class="adv-progress-bar-wrap">
-        <div class="adv-progress-bar" style="width:${Math.min(pct,100)}%"></div>
-      </div>
-      <div class="adv-progress-label">${pct}% utilizado</div>
-    </div>`;
-  }).join('');
-}
-
-function openNewAdvanceModal() {
-  ['adv-purpose','adv-projeto','adv-notes','adv-phone'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.value = '';
-  });
-  document.getElementById('adv-amount').value = '';
-  const pm = document.getElementById('adv-pay-method');
-  if (pm) pm.selectedIndex = 0;
-  document.getElementById('adv-phone-wrap')?.classList.add('hidden');
-  openModal('modal-advance-new');
-}
-
-function saveAdvance() {
-  const purpose = document.getElementById('adv-purpose').value.trim();
-  const amount  = parseFloat(document.getElementById('adv-amount').value);
-  const projeto = document.getElementById('adv-projeto').value.trim();
-  const payMethod = document.getElementById('adv-pay-method').value;
-  const phoneNum  = document.getElementById('adv-phone').value.trim();
-
-  if (!purpose || isNaN(amount) || amount <= 0) {
-    showToast('Preencha o motivo e o valor', 'error'); return;
-  }
-
-  const adv = DB.saveAdvance({
-    id: DB.uid(), companyId: currentCompany.id, requestedBy: currentUser.id,
-    amount, currency: currentCompany.currency || 'MZN',
-    purpose, projeto,
-    paymentMethod: payMethod,
-    phoneNumber: ['mpesa','emola','mpesk'].includes(payMethod) ? phoneNum : '',
-    status: 'pending',
-    approvedBy: null,
-    requestedAt: new Date().toISOString().slice(0,10),
-    approvedAt: null, disbursedAt: null,
-    totalUsed: 0, remaining: amount,
-    linkedExpenses: [],
-    notes: document.getElementById('adv-notes')?.value.trim() || '',
-  });
-
-  // Notify approvers
-  const chain = currentCompany.approvalChain || [];
-  if (chain.length > 0) {
-    const approvers = DB.getApproversForLevel(currentCompany.id, chain[0].level);
-    approvers.forEach(u => pushNotification(u.id, 'Novo Adiantamento', `${currentUser.name} solicitou um adiantamento de ${fmtCurrency(amount, currentCompany.currency||'MZN')}.`, 'info'));
-  }
-
-  closeModal('modal-advance-new');
-  showToast('Adiantamento solicitado! 📤', 'success');
-  updateBadges();
-  renderAdiantamentos();
-}
-
-function openAdvanceDetail(id) {
-  const adv = DB.getAdvance(id);
-  if (!adv) return;
-  const requester = DB.getUser(adv.requestedBy);
-  const currency  = currentCompany?.currency || 'MZN';
-  const statusTxt = {pending:'⏳ Pendente',approved:'✅ Aprovado',disbursed:'💸 Desembolsado',reconciled:'🔒 Reconciliado'}[adv.status]||adv.status;
-
-  const body = document.getElementById('adv-detail-body');
-  if (!body) return;
-  body.innerHTML = `
-    <div class="detail-grid">
-      <div class="detail-item detail-full"><div class="detail-label">Motivo</div><div class="detail-value">${adv.purpose}</div></div>
-      <div class="detail-item"><div class="detail-label">Estado</div><div class="detail-value">${statusTxt}</div></div>
-      <div class="detail-item"><div class="detail-label">Valor</div><div class="detail-value">${fmtCurrency(adv.amount, currency)}</div></div>
-      <div class="detail-item"><div class="detail-label">Solicitante</div><div class="detail-value">${requester?.name||'—'}</div></div>
-      <div class="detail-item"><div class="detail-label">Projeto</div><div class="detail-value">${adv.projeto||'—'}</div></div>
-      <div class="detail-item"><div class="detail-label">Pagamento</div><div class="detail-value">${payMethodLabel(adv.paymentMethod)}</div></div>
-      ${adv.phoneNumber ? `<div class="detail-item"><div class="detail-label">Telefone</div><div class="detail-value">${adv.phoneNumber}</div></div>` : ''}
-      <div class="detail-item"><div class="detail-label">Solicitado</div><div class="detail-value">${fmtDate(adv.requestedAt)}</div></div>
-      ${adv.approvedAt ? `<div class="detail-item"><div class="detail-label">Aprovado</div><div class="detail-value">${fmtDate(adv.approvedAt)}</div></div>` : ''}
-      ${adv.disbursedAt ? `<div class="detail-item"><div class="detail-label">Desembolsado</div><div class="detail-value">${fmtDate(adv.disbursedAt)}</div></div>` : ''}
-      <div class="detail-item"><div class="detail-label">Utilizado</div><div class="detail-value">${fmtCurrency(adv.totalUsed||0, currency)}</div></div>
-      <div class="detail-item"><div class="detail-label">Restante</div><div class="detail-value">${fmtCurrency(adv.remaining??adv.amount, currency)}</div></div>
-      ${adv.notes ? `<div class="detail-item detail-full"><div class="detail-label">Notas</div><div class="detail-value">${adv.notes}</div></div>` : ''}
-    </div>`;
-
-  // Actions
-  const actionsEl = document.getElementById('adv-detail-actions');
-  if (!actionsEl) return;
-  let actions = `<button class="btn btn-outline" onclick="closeModal('modal-advance-detail')">Fechar</button>`;
-  if (currentUser.role !== 'funcionario') {
-    if (adv.status === 'pending') {
-      actions += ` <button class="btn btn-success" onclick="approveAdvance('${id}')">✅ Aprovar</button>
-                   <button class="btn btn-danger"  onclick="rejectAdvance('${id}')">❌ Rejeitar</button>`;
-    }
-    if (adv.status === 'approved') {
-      actions += ` <button class="btn btn-primary" onclick="disburseAdvance('${id}')">💸 Desembolsar</button>`;
-    }
-    if (adv.status === 'disbursed') {
-      actions += ` <button class="btn btn-secondary" onclick="reconcileAdvance('${id}')">🔒 Reconciliar</button>`;
-    }
-  }
-  actionsEl.innerHTML = actions;
-  document.getElementById('adv-detail-title').textContent = adv.purpose;
-  openModal('modal-advance-detail');
-}
-
-function approveAdvance(id) {
-  const adv = DB.getAdvance(id);
-  if (!adv) return;
-  adv.status = 'approved';
-  adv.approvedBy = currentUser.id;
-  adv.approvedAt = new Date().toISOString().slice(0,10);
-  DB.saveAdvance(adv);
-  pushNotification(adv.requestedBy, 'Adiantamento Aprovado', `O seu adiantamento de ${fmtCurrency(adv.amount, adv.currency||'MZN')} foi aprovado! ✅`, 'success');
-  closeModal('modal-advance-detail');
-  showToast('Adiantamento aprovado! ✅', 'success');
-  renderAdiantamentos();
-}
-function rejectAdvance(id) {
-  const adv = DB.getAdvance(id);
-  if (!adv) return;
-  adv.status = 'rejected';
-  DB.saveAdvance(adv);
-  pushNotification(adv.requestedBy, 'Adiantamento Rejeitado', 'O seu adiantamento foi rejeitado.', 'error');
-  closeModal('modal-advance-detail');
-  showToast('Adiantamento rejeitado', 'error');
-  renderAdiantamentos();
-}
-function disburseAdvance(id) {
-  const adv = DB.getAdvance(id);
-  if (!adv) return;
-  adv.status = 'disbursed';
-  adv.disbursedAt = new Date().toISOString().slice(0,10);
-  DB.saveAdvance(adv);
-  pushNotification(adv.requestedBy, 'Adiantamento Desembolsado', `O seu adiantamento de ${fmtCurrency(adv.amount, adv.currency||'MZN')} foi desembolsado! 💸`, 'info');
-  closeModal('modal-advance-detail');
-  showToast('Adiantamento desembolsado! 💸', 'success');
-  renderAdiantamentos();
-}
-function reconcileAdvance(id) {
-  const adv = DB.getAdvance(id);
-  if (!adv) return;
-  adv.status = 'reconciled';
-  DB.saveAdvance(adv);
-  closeModal('modal-advance-detail');
-  showToast('Adiantamento reconciliado 🔒', 'success');
-  renderAdiantamentos();
-}
-
+// ── ADIANTAMENTOS (removido) ──
+function renderAdiantamentos() { /* funcionalidade removida */ }
+function openNewAdvanceModal()  { /* removido */ }
+function saveAdvance()          { /* removido */ }
+function openAdvanceDetail()    { /* removido */ }
+function approveAdvance()       { /* removido */ }
+function rejectAdvance()        { /* removido */ }
+function disburseAdvance()      { /* removido */ }
 // ── FRAUD PAGE ──
 function renderFraudePage() {
   if (!currentCompany) return;

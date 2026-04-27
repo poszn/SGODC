@@ -369,8 +369,39 @@ img { max-width: 100%; }
   flex-shrink: 0; gap: 10px;
 }
 .sidebar-brand { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+/* Logo wrap clicável */
+.sidebar-logo-wrap {
+  position: relative;
+  width: 40px; height: 40px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  transition: box-shadow 0.18s;
+}
+.sidebar-logo-wrap:hover .sidebar-logo-edit-hint {
+  opacity: 1;
+}
+.sidebar-logo-img {
+  width: 40px; height: 40px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  display: block;
+}
+.sidebar-logo-edit-hint {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  color: #fff;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.18s;
+  border-radius: var(--radius-sm);
+}
 .sidebar-brand-icon {
-  width: 34px; height: 34px; flex-shrink: 0;
+  width: 40px; height: 40px; flex-shrink: 0;
   background: var(--primary);
   border-radius: var(--radius-sm);
   display: flex; align-items: center; justify-content: center;
