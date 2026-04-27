@@ -187,7 +187,13 @@
     <!-- Header: logo + company name -->
     <div class="sidebar-header">
       <div class="sidebar-brand">
-        <div class="sidebar-brand-icon">S</div>
+        <!-- Logo clicável: admin pode trocar; outros só vêem -->
+        <div class="sidebar-logo-wrap" id="sidebar-logo-wrap" onclick="triggerLogoUpload()" title="Clique para alterar o logótipo">
+          <img id="sidebar-logo-img" class="sidebar-logo-img hidden" alt="Logo"/>
+          <div class="sidebar-brand-icon" id="sidebar-brand-letter">S</div>
+          <div class="sidebar-logo-edit-hint admin-only hidden">✏️</div>
+        </div>
+        <input type="file" id="logo-file-input" accept="image/*" class="hidden" onchange="onLogoFileChange(this)"/>
         <div class="sidebar-brand-text">
           <span class="sidebar-company" id="sidebar-company">SGODC</span>
           <span class="sidebar-sub">Operações & Despesas de Campo</span>
@@ -204,11 +210,11 @@
 
       <!-- SUBMETER -->
       <div class="nav-section">SUBMETER</div>
-      <button class="nav-item" data-page="page-procurement" onclick="showPage('page-procurement')">
-        <span class="nav-icon">📤</span><span>Enviar Despesa</span>
-      </button>
       <button class="nav-item" data-page="page-campo" onclick="showPage('page-campo')">
         <span class="nav-icon">🌍</span><span>Trabalho de Campo</span>
+      </button>
+      <button class="nav-item manager-only hidden" data-page="page-procurement" onclick="showPage('page-procurement')">
+        <span class="nav-icon">📤</span><span>Enviar Despesa</span>
       </button>
 
       <!-- APROVAÇÃO -->
@@ -255,9 +261,6 @@
       <div class="nav-section">GESTÃO</div>
       <button class="nav-item" data-page="page-despesas" onclick="showPage('page-despesas')">
         <span class="nav-icon">📁</span><span>Todas as Despesas</span>
-      </button>
-      <button class="nav-item" data-page="page-adiantamentos" onclick="showPage('page-adiantamentos')">
-        <span class="nav-icon">💸</span><span>Adiantamentos</span>
       </button>
       <button class="nav-item" data-page="page-notificacoes" onclick="showPage('page-notificacoes')">
         <span class="nav-icon">🔔</span><span>Notificações</span>
@@ -374,9 +377,6 @@
       <div class="quick-actions">
         <h3>Acções Rápidas</h3>
         <div class="quick-grid">
-          <button class="quick-btn" onclick="showPage('page-procurement')">
-            <span class="quick-icon">📤</span><span>Enviar Despesa</span>
-          </button>
           <button class="quick-btn" onclick="showPage('page-campo')">
             <span class="quick-icon">🌍</span><span>Trabalho de Campo</span>
           </button>
@@ -385,9 +385,6 @@
           </button>
           <button class="quick-btn" onclick="setRelPeriod('month')">
             <span class="quick-icon">📊</span><span>Relatório Mensal</span>
-          </button>
-          <button class="quick-btn" onclick="showPage('page-adiantamentos')">
-            <span class="quick-icon">💸</span><span>Adiantamento</span>
           </button>
           <button class="quick-btn" onclick="showPage('page-tendencias')">
             <span class="quick-icon">📉</span><span>Tendências</span>
@@ -706,13 +703,6 @@
           <textarea id="pedido-justificacao" rows="4" placeholder="Descreva o objectivo da missão, actividades previstas e impacto esperado…"></textarea>
         </div>
 
-        <div class="form-group">
-          <label>Necessita de Adiantamento?</label>
-          <select id="pedido-adiantamento">
-            <option value="nao">Não — despesas pagas pelo próprio</option>
-            <option value="sim">Sim — solicitar adiantamento</option>
-          </select>
-        </div>
 
         <div class="form-group">
           <label>Método de Pagamento Previsto</label>
@@ -910,16 +900,6 @@
       </div>
     </div>
 
-    <!-- ── ADIANTAMENTOS ── -->
-    <div id="page-adiantamentos" class="page">
-      <div class="page-header">
-        <h2>💸 Adiantamentos</h2>
-        <button class="btn btn-primary btn-sm" onclick="openNewAdvanceModal()">+ Solicitar Adiantamento</button>
-      </div>
-      <div id="adv-list">
-        <p class="empty-state">Nenhum adiantamento registado.</p>
-      </div>
-    </div>
 
     <!-- ── PLANEAMENTO ── -->
     <div id="page-planeamento" class="page">
@@ -1311,65 +1291,6 @@
   </div>
 </div>
 
-<!-- New Advance Modal -->
-<div id="modal-advance-new" class="modal-overlay hidden" onclick="closeModal('modal-advance-new')">
-  <div class="modal-box" onclick="event.stopPropagation()">
-    <div class="modal-header">
-      <h3>💸 Solicitar Adiantamento</h3>
-      <button class="modal-close" onclick="closeModal('modal-advance-new')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label>Motivo / Propósito *</label>
-        <input id="adv-purpose" type="text" placeholder="Ex: Missão campo – Inhambane 3 dias"/>
-      </div>
-      <div class="form-row">
-        <div class="form-group flex1">
-          <label>Valor Solicitado *</label>
-          <input id="adv-amount" type="number" min="0" step="0.01" placeholder="0.00"/>
-        </div>
-        <div class="form-group flex1">
-          <label>Projeto</label>
-          <input id="adv-projeto" type="text" placeholder="Código do projeto"/>
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Método de Pagamento</label>
-        <select id="adv-pay-method" onchange="onPayMethodChange('adv-pay-method','adv-phone-wrap')">
-          <option value="cash">💵 Numerário</option>
-          <option value="mpesa">📱 M-Pesa</option>
-          <option value="emola">📱 eMola</option>
-          <option value="mpesk">📱 mPesk</option>
-          <option value="bank">🏦 Transferência Bancária</option>
-        </select>
-      </div>
-      <div id="adv-phone-wrap" class="form-group hidden">
-        <label>Número de Telemóvel</label>
-        <input id="adv-phone" type="tel" placeholder="+258 84 000 0000"/>
-      </div>
-      <div class="form-group">
-        <label>Notas adicionais</label>
-        <textarea id="adv-notes" rows="2" placeholder="Justificação…"></textarea>
-      </div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-outline" onclick="closeModal('modal-advance-new')">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveAdvance()">📤 Solicitar</button>
-    </div>
-  </div>
-</div>
-
-<!-- Advance Detail Modal -->
-<div id="modal-advance-detail" class="modal-overlay hidden" onclick="closeModal('modal-advance-detail')">
-  <div class="modal-box" onclick="event.stopPropagation()">
-    <div class="modal-header">
-      <h3 id="adv-detail-title">Detalhe do Adiantamento</h3>
-      <button class="modal-close" onclick="closeModal('modal-advance-detail')">✕</button>
-    </div>
-    <div id="adv-detail-body" class="modal-body"></div>
-    <div id="adv-detail-actions" class="modal-actions"></div>
-  </div>
-</div>
 
 <!-- GPS Tracking Modal -->
 <div id="modal-gps" class="modal-overlay hidden" onclick="closeGPSModal()">
