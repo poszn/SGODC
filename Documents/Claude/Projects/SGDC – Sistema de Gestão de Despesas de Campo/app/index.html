@@ -210,11 +210,11 @@
 
       <!-- SUBMETER -->
       <div class="nav-section">SUBMETER</div>
-      <button class="nav-item manager-only hidden" data-page="page-procurement" onclick="showPage('page-procurement')">
-        <span class="nav-icon">📤</span><span>Enviar Despesa</span>
-      </button>
       <button class="nav-item" data-page="page-campo" onclick="showPage('page-campo')">
         <span class="nav-icon">🌍</span><span>Trabalho de Campo</span>
+      </button>
+      <button class="nav-item manager-only hidden" data-page="page-procurement" onclick="showPage('page-procurement')">
+        <span class="nav-icon">📤</span><span>Enviar Despesa</span>
       </button>
 
       <!-- APROVAÇÃO -->
@@ -377,9 +377,6 @@
       <div class="quick-actions">
         <h3>Acções Rápidas</h3>
         <div class="quick-grid">
-          <button class="quick-btn" onclick="showPage('page-procurement')">
-            <span class="quick-icon">📤</span><span>Enviar Despesa</span>
-          </button>
           <button class="quick-btn" onclick="showPage('page-campo')">
             <span class="quick-icon">🌍</span><span>Trabalho de Campo</span>
           </button>
@@ -706,13 +703,6 @@
           <textarea id="pedido-justificacao" rows="4" placeholder="Descreva o objectivo da missão, actividades previstas e impacto esperado…"></textarea>
         </div>
 
-        <div class="form-group">
-          <label>Necessita de Adiantamento?</label>
-          <select id="pedido-adiantamento">
-            <option value="nao">Não — despesas pagas pelo próprio</option>
-            <option value="sim">Sim — solicitar adiantamento</option>
-          </select>
-        </div>
 
         <div class="form-group">
           <label>Método de Pagamento Previsto</label>
