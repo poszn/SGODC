@@ -325,9 +325,10 @@ function getMyExpenses() {
 function filterByPeriod(expenses, period) {
   const now   = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  // Start of this week (Monday)
-  const dow   = (now.getDay() + 6) % 7; // 0=Mon
+  const dow   = (now.getDay() + 6) % 7;
   const weekStart = new Date(today); weekStart.setDate(today.getDate() - dow);
+  const months3 = new Date(today); months3.setMonth(today.getMonth() - 3);
+  const months6 = new Date(today); months6.setMonth(today.getMonth() - 6);
   return expenses.filter(e => {
     const dateStr = e.data || (e.submittedAt ? e.submittedAt.slice(0,10) : null);
     if (!dateStr) return period === 'all';
@@ -335,13 +336,19 @@ function filterByPeriod(expenses, period) {
     if (period === 'day')     return d >= today;
     if (period === 'week')    return d >= weekStart;
     if (period === 'month')   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    if (period === '3months') return d >= months3;
+    if (period === '6months') return d >= months6;
     if (period === 'quarter') { const q = Math.floor(now.getMonth()/3); return d.getFullYear() === now.getFullYear() && Math.floor(d.getMonth()/3) === q; }
     if (period === 'year')    return d.getFullYear() === now.getFullYear();
-    return true; // 'all'
+    return true;
   });
 }
 function periodLabel(period) {
-  return { day: 'Hoje', week: 'Esta Semana', month: 'Este Mês', year: 'Este Ano', quarter: 'Trimestre', all: 'Todo o Período' }[period] || period;
+  return {
+    day: 'Hoje', week: 'Esta Semana', month: 'Este Mês',
+    '3months': 'Últimos 3 Meses', '6months': 'Últimos 6 Meses',
+    year: 'Este Ano', quarter: 'Trimestre', all: 'Todo o Período'
+  }[period] || period;
 }
 
 // ── BADGES & NOTIFICATIONS ──
@@ -1036,12 +1043,16 @@ function submitPedidoCampo(status) {
   const approvals  = _buildApprovalChain(status);
   const pessoas    = parseInt(document.getElementById('pedido-pessoas')?.value) || 1;
 
+  // Fornecedor do pedido
+  const fornPedido = _saveFornecedorPedidoInline?.() || null;
+
   const exp = {
     id: DB.uid(), companyId: currentCompany.id, userId: currentUser.id,
     type: 'campo-pedido', status,
     name: titulo || `Pedido de Missão – ${local || ''}`,
     expenseType: tipoDespesa || atividade,
     tipoDespesa,
+    fornecedor: fornPedido ? { id: fornPedido.id, nome: fornPedido.nome, nuit: fornPedido.nuit, tipo: fornPedido.tipo, modalidade: fornPedido.modalidade } : null,
     facturaType: facturaT,
     facturaLinhas: facturaT === 'conjunta' ? facturaInfo.linhas : [],
     valor: total, moeda,
@@ -1171,8 +1182,8 @@ function submitCampo(status) {
   const phoneNum  = document.getElementById('campo-phone')?.value.trim() || '';
   const recInput  = document.getElementById('campo-recibo');
   const receiptData = recInput?._base64 || null;
-  const kmEl      = document.getElementById('campo-km');
-  const km        = kmEl && kmEl.value ? parseFloat(kmEl.value) : null;
+  const gpsEl     = document.getElementById('campo-gps');
+  const gpsCoords = gpsEl?.value.trim() || null;
   const approvals = _buildApprovalChain(status);
 
   // Fornecedor
@@ -1196,7 +1207,7 @@ function submitCampo(status) {
     comentario: document.getElementById('campo-comentario').value.trim(),
     paymentMethod: payMethod,
     phoneNumber: ['mpesa','emola','mpesk'].includes(payMethod) ? phoneNum : '',
-    km,
+    gpsCoords,
     receiptData,
     approvals,
     submittedAt: status === 'pending' ? inicio : null,
@@ -2154,6 +2165,99 @@ function _saveFornecedorInline() {
   };
   if (guardar) DB.saveFornecedor(f);
   return f;
+}
+
+// ── Fornecedor no Pedido de Aprovação ──
+let _fornSelecionadoPedido = null;
+
+function searchFornecedorPedido(q) {
+  const dd = document.getElementById('pedido-forn-dropdown');
+  if (!dd || !currentCompany) return;
+  if (!q || q.length < 2) { dd.classList.add('hidden'); return; }
+  const list = DB.getFornecedoresByCompany(currentCompany.id)
+    .filter(f => (f.nome+f.nuit+f.contacto).toLowerCase().includes(q.toLowerCase()))
+    .slice(0, 6);
+  if (list.length === 0) {
+    dd.innerHTML = '<div class="forn-dd-item forn-dd-empty">Nenhum resultado — adicione abaixo</div>';
+  } else {
+    dd.innerHTML = list.map(f => `
+      <div class="forn-dd-item" onclick="selectFornecedorPedido('${f.id}')">
+        <span class="forn-dd-nome">${f.nome}</span>
+        <span class="forn-dd-meta">${FORN_TIPO_LABEL[f.tipo]||''} · ${FORN_PAG_LABEL[f.modalidade]||''}</span>
+      </div>`).join('');
+  }
+  dd.classList.remove('hidden');
+}
+
+function selectFornecedorPedido(id) {
+  const f = DB.getFornecedor(id);
+  if (!f) return;
+  _fornSelecionadoPedido = f;
+  document.getElementById('pedido-forn-search').value = '';
+  document.getElementById('pedido-forn-dropdown').classList.add('hidden');
+  document.getElementById('pedido-forn-nome-disp').textContent = f.nome;
+  document.getElementById('pedido-forn-nuit-disp').textContent = f.nuit ? `NUIT: ${f.nuit}` : '';
+  document.getElementById('pedido-forn-tipo-disp').textContent = FORN_TIPO_LABEL[f.tipo] || '';
+  document.getElementById('pedido-forn-pag-disp').textContent  = FORN_PAG_LABEL[f.modalidade] || '';
+  document.getElementById('pedido-forn-selected').classList.remove('hidden');
+  document.getElementById('pedido-forn-novo-wrap')?.classList.add('hidden');
+  document.getElementById('btn-toggle-pedido-forn').textContent = '+ Adicionar Novo Fornecedor';
+}
+
+function clearFornecedorPedido() {
+  _fornSelecionadoPedido = null;
+  document.getElementById('pedido-forn-search').value = '';
+  document.getElementById('pedido-forn-selected').classList.add('hidden');
+}
+
+function toggleNovoFornecedorPedido() {
+  const wrap = document.getElementById('pedido-forn-novo-wrap');
+  const btn  = document.getElementById('btn-toggle-pedido-forn');
+  if (!wrap) return;
+  const showing = !wrap.classList.contains('hidden');
+  wrap.classList.toggle('hidden', showing);
+  btn.textContent = showing ? '+ Adicionar Novo Fornecedor' : '− Cancelar';
+}
+
+function _saveFornecedorPedidoInline() {
+  if (_fornSelecionadoPedido) return _fornSelecionadoPedido;
+  const nome = document.getElementById('pedido-forn-nome')?.value.trim();
+  if (!nome) return null;
+  const guardar = document.getElementById('pedido-forn-guardar')?.checked;
+  const f = {
+    id: DB.uid(), companyId: currentCompany.id,
+    nome,
+    nuit:      document.getElementById('pedido-forn-nuit')?.value.trim() || '',
+    contacto:  document.getElementById('pedido-forn-contacto')?.value.trim() || '',
+    tipo:      document.getElementById('pedido-forn-tipo')?.value || 'outro',
+    modalidade:document.querySelector('input[name="pedido-forn-pag"]:checked')?.value || 'pronto',
+    criadoEm:  new Date().toISOString(),
+  };
+  if (guardar) DB.saveFornecedor(f);
+  return f;
+}
+
+// ── GPS — capturar apenas coordenadas ──
+function captureGPSCoords(fieldId) {
+  const input = document.getElementById(fieldId);
+  if (!input) return;
+  if (!navigator.geolocation) {
+    showToast('GPS não disponível neste dispositivo', 'error'); return;
+  }
+  showToast('A capturar localização...', 'info');
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const lat = pos.coords.latitude.toFixed(6);
+      const lon = pos.coords.longitude.toFixed(6);
+      input.value = `${lat}, ${lon}`;
+      input.removeAttribute('readonly');
+      showToast(`📍 Localização capturada: ${lat}, ${lon}`, 'success');
+    },
+    err => {
+      showToast('Não foi possível capturar localização. Insira manualmente.', 'error');
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
 }
 
 // ── Número de documento automático ──

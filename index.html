@@ -241,6 +241,12 @@
       <button class="nav-item" data-page="page-relatorios" onclick="setRelPeriod('month')">
         <span class="nav-icon">📊</span><span>Mensais</span>
       </button>
+      <button class="nav-item" data-page="page-relatorios" onclick="setRelPeriod('3months')">
+        <span class="nav-icon">📅</span><span>3 Meses</span>
+      </button>
+      <button class="nav-item" data-page="page-relatorios" onclick="setRelPeriod('6months')">
+        <span class="nav-icon">📅</span><span>6 Meses</span>
+      </button>
       <button class="nav-item" data-page="page-relatorios" onclick="setRelPeriod('year')">
         <span class="nav-icon">📈</span><span>Anuais</span>
       </button>
@@ -707,7 +713,77 @@
         </div>
 
 
-        <div class="form-group">
+        <!-- ── FORNECEDOR (Pedido) ── -->
+        <div class="form-section-title">🏢 Dados do Fornecedor</div>
+        <div class="form-group" style="position:relative">
+          <label>Pesquisar Fornecedor</label>
+          <input id="pedido-forn-search" type="text" placeholder="Nome, NUIT ou tipo..." oninput="searchFornecedorPedido(this.value)" autocomplete="off"/>
+          <div id="pedido-forn-dropdown" class="forn-dropdown hidden"></div>
+        </div>
+        <div id="pedido-forn-selected" class="forn-card hidden">
+          <div class="forn-card-row">
+            <div>
+              <div class="forn-card-nome" id="pedido-forn-nome-disp"></div>
+              <div class="forn-card-meta">
+                <span id="pedido-forn-nuit-disp"></span>
+                <span id="pedido-forn-tipo-disp"></span>
+                <span id="pedido-forn-pag-disp"></span>
+              </div>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline" onclick="clearFornecedorPedido()">✕ Remover</button>
+          </div>
+        </div>
+        <div id="pedido-forn-novo-wrap" class="hidden">
+          <div class="form-section-title" style="font-size:13px;margin-top:8px">➕ Novo Fornecedor</div>
+          <div class="form-row">
+            <div class="form-group flex1">
+              <label>Nome da Empresa *</label>
+              <input id="pedido-forn-nome" type="text" placeholder="Ex: Hotel Central, Transportes Maputo…"/>
+            </div>
+            <div class="form-group flex1">
+              <label>NUIT</label>
+              <input id="pedido-forn-nuit" type="text" placeholder="000000000" maxlength="9"/>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex1">
+              <label>Contacto</label>
+              <input id="pedido-forn-contacto" type="tel" placeholder="+258 84 000 0000"/>
+            </div>
+            <div class="form-group flex1">
+              <label>Tipo de Fornecedor</label>
+              <select id="pedido-forn-tipo">
+                <option value="hotel">🏨 Hotel / Alojamento</option>
+                <option value="restaurante">🍽️ Restaurante / Alimentação</option>
+                <option value="transporte">🚗 Transportadora</option>
+                <option value="comunicacao">📞 Comunicações</option>
+                <option value="outro">⚙️ Outro</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Modalidade de Pagamento</label>
+            <div class="radio-group">
+              <label class="radio-opt">
+                <input type="radio" name="pedido-forn-pag" value="pronto" checked/>
+                <span class="radio-box"></span>
+                <span class="radio-label">💵 Pronto Pagamento</span>
+              </label>
+              <label class="radio-opt">
+                <input type="radio" name="pedido-forn-pag" value="credito"/>
+                <span class="radio-box"></span>
+                <span class="radio-label">🏦 A Prazo (Crédito)</span>
+              </label>
+            </div>
+          </div>
+          <label class="checkbox-item" style="margin-bottom:12px">
+            <input type="checkbox" id="pedido-forn-guardar" checked/>
+            💾 Guardar fornecedor para uso futuro
+          </label>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-toggle-pedido-forn" onclick="toggleNovoFornecedorPedido()">+ Adicionar Novo Fornecedor</button>
+
+        <div class="form-group" style="margin-top:16px">
           <label>Método de Pagamento Previsto</label>
           <select id="pedido-pay-method" onchange="onPayMethodChange('pedido-pay-method','pedido-phone-wrap')">
             <option value="cash">💵 Numerário</option>
@@ -933,13 +1009,13 @@
           <div class="iva-row iva-total"><span>💰 Total com IVA</span><span id="campo-total-iva-disp">0.00 MZN</span></div>
         </div>
 
-        <!-- GPS -->
+        <!-- GPS Coordenadas -->
         <div class="form-group">
           <div class="form-label-row">
-            <label>📍 Distância Percorrida (km)</label>
-            <button type="button" class="btn btn-sm btn-outline" onclick="openGPSForField('campo-km')">🛰️ Rastrear GPS</button>
+            <label>📍 Localização GPS (coordenadas)</label>
+            <button type="button" class="btn btn-sm btn-outline" onclick="captureGPSCoords('campo-gps')">📍 Capturar</button>
           </div>
-          <input id="campo-km" type="number" min="0" step="0.01" placeholder="0.00 km (opcional)"/>
+          <input id="campo-gps" type="text" placeholder="Ex: -25.9629, 32.5732 (colar ou capturar)" readonly onclick="this.removeAttribute('readonly')" style="cursor:text"/>
         </div>
         <!-- Payment method -->
         <div class="form-group">
