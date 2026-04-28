@@ -208,14 +208,18 @@
         <span class="nav-icon">🏠</span><span>Início</span>
       </button>
 
-      <!-- SUBMETER -->
-      <div class="nav-section">SUBMETER</div>
-      <button class="nav-item" data-page="page-campo" onclick="showPage('page-campo')">
-        <span class="nav-icon">🌍</span><span>Trabalho de Campo</span>
-      </button>
-      <button class="nav-item manager-only hidden" data-page="page-procurement" onclick="showPage('page-procurement')">
-        <span class="nav-icon">📤</span><span>Enviar Despesa</span>
-      </button>
+      <!-- SUBMETER (colapsável) -->
+      <div class="nav-section-toggle" onclick="toggleNavGroup('nav-submeter')">
+        <span>SUBMETER</span><span class="nav-caret" id="caret-submeter">▼</span>
+      </div>
+      <div class="nav-group" id="nav-submeter">
+        <button class="nav-item nav-sub" onclick="showCampoForm('pedido')">
+          <span class="nav-icon">📋</span><span>Pedido de Aprovação</span>
+        </button>
+        <button class="nav-item nav-sub" onclick="showCampoForm('relatorio')">
+          <span class="nav-icon">📤</span><span>Envio de Despesas</span>
+        </button>
+      </div>
 
       <!-- APROVAÇÃO -->
       <div class="nav-section manager-only hidden">APROVAÇÃO</div>
@@ -227,29 +231,33 @@
       <!-- PLANEAMENTO -->
       <div class="nav-section">PLANEAMENTO</div>
       <button class="nav-item" data-page="page-planeamento" onclick="showPage('page-planeamento')">
-        <span class="nav-icon">📅</span><span>Planeamento</span>
+        <span class="nav-icon">📅</span><span>Planeamento de Saída</span>
       </button>
 
-      <!-- RELATÓRIOS -->
-      <div class="nav-section">RELATÓRIOS</div>
-      <button class="nav-item" data-page="page-relatorios" onclick="setRelPeriod('day')">
-        <span class="nav-icon">📆</span><span>Diários</span>
-      </button>
-      <button class="nav-item" data-page="page-relatorios" onclick="setRelPeriod('week')">
-        <span class="nav-icon">🗓️</span><span>Semanais</span>
-      </button>
-      <button class="nav-item" data-page="page-relatorios" onclick="setRelPeriod('month')">
-        <span class="nav-icon">📊</span><span>Mensais</span>
-      </button>
-      <button class="nav-item" data-page="page-relatorios" onclick="setRelPeriod('3months')">
-        <span class="nav-icon">📅</span><span>3 Meses</span>
-      </button>
-      <button class="nav-item" data-page="page-relatorios" onclick="setRelPeriod('6months')">
-        <span class="nav-icon">📅</span><span>6 Meses</span>
-      </button>
-      <button class="nav-item" data-page="page-relatorios" onclick="setRelPeriod('year')">
-        <span class="nav-icon">📈</span><span>Anuais</span>
-      </button>
+      <!-- RELATÓRIOS (colapsável) -->
+      <div class="nav-section-toggle" onclick="toggleNavGroup('nav-relatorios')">
+        <span>RELATÓRIOS</span><span class="nav-caret" id="caret-relatorios">▼</span>
+      </div>
+      <div class="nav-group" id="nav-relatorios">
+        <button class="nav-item nav-sub" data-page="page-relatorios" onclick="setRelPeriod('day')">
+          <span class="nav-icon">📆</span><span>Diários</span>
+        </button>
+        <button class="nav-item nav-sub" data-page="page-relatorios" onclick="setRelPeriod('week')">
+          <span class="nav-icon">🗓️</span><span>Semanais</span>
+        </button>
+        <button class="nav-item nav-sub" data-page="page-relatorios" onclick="setRelPeriod('month')">
+          <span class="nav-icon">📊</span><span>Mensais</span>
+        </button>
+        <button class="nav-item nav-sub" data-page="page-relatorios" onclick="setRelPeriod('3months')">
+          <span class="nav-icon">📅</span><span>3 Meses</span>
+        </button>
+        <button class="nav-item nav-sub" data-page="page-relatorios" onclick="setRelPeriod('6months')">
+          <span class="nav-icon">📅</span><span>6 Meses</span>
+        </button>
+        <button class="nav-item nav-sub" data-page="page-relatorios" onclick="setRelPeriod('year')">
+          <span class="nav-icon">📈</span><span>Anuais</span>
+        </button>
+      </div>
 
       <!-- ANÁLISE -->
       <div class="nav-section">ANÁLISE</div>
@@ -288,7 +296,7 @@
 
     <!-- CTA button at bottom -->
     <div class="sidebar-cta">
-      <button class="sidebar-cta-btn" onclick="showPage('page-procurement')">
+      <button class="sidebar-cta-btn" onclick="openNovaDespesaModal()">
         + Nova Despesa
       </button>
     </div>
@@ -305,7 +313,7 @@
           <h2 id="dash-greeting">Bom dia 👋</h2>
           <p class="page-sub" id="dash-date"></p>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="showPage('page-procurement')">+ Nova Despesa</button>
+        <button class="btn btn-primary btn-sm" onclick="openNovaDespesaModal()">+ Nova Despesa</button>
       </div>
 
       <!-- Período selector -->
@@ -1512,11 +1520,41 @@
   </div>
 </div>
 
+<!-- Modal: Picker Nova Despesa -->
+<div id="modal-nova-despesa" class="modal hidden">
+  <div class="modal-backdrop" onclick="closeModal('modal-nova-despesa')"></div>
+  <div class="modal-dialog" style="max-width:420px">
+    <div class="modal-header">
+      <h3>➕ Nova Despesa</h3>
+      <button class="modal-close" onclick="closeModal('modal-nova-despesa')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text-secondary);margin-bottom:16px;font-size:14px">Escolha o tipo de formulário:</p>
+      <div class="nova-despesa-opts">
+        <button class="nova-despesa-opt" onclick="escolherFormulario('pedido')">
+          <span class="nova-despesa-icon">📋</span>
+          <div>
+            <div class="nova-despesa-title">Pedido de Aprovação</div>
+            <div class="nova-despesa-sub">Solicitar autorização <strong>antes</strong> de ir para o campo</div>
+          </div>
+        </button>
+        <button class="nova-despesa-opt" onclick="escolherFormulario('relatorio')">
+          <span class="nova-despesa-icon">📤</span>
+          <div>
+            <div class="nova-despesa-title">Envio de Despesas</div>
+            <div class="nova-despesa-sub">Registar despesas <strong>após</strong> regressar da missão</div>
+          </div>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Plan Activity Modal -->
 <div id="modal-plan" class="modal-overlay hidden" onclick="closeModal('modal-plan')">
   <div class="modal-box" onclick="event.stopPropagation()">
     <div class="modal-header">
-      <h3>📅 Nova Atividade Planeada</h3>
+      <h3>📅 Planeamento de Saída</h3>
       <button class="modal-close" onclick="closeModal('modal-plan')">✕</button>
     </div>
     <div class="modal-body">
@@ -1553,7 +1591,47 @@
         <div class="total-value" id="plan-total-display">0.00 MZN</div>
       </div>
       <div class="form-group"><label>Projeto</label><input id="plan-projeto" type="text" placeholder="Código do projeto"/></div>
-      <div class="form-group"><label>Notas</label><textarea id="plan-notas" rows="2" placeholder="Informação adicional…"></textarea></div>
+
+      <!-- Fornecedor no Planeamento -->
+      <div class="form-section-title" style="margin-top:12px">🏢 Dados do Fornecedor</div>
+      <div class="form-group" style="position:relative">
+        <input id="plan-forn-search" type="text" placeholder="🔍 Pesquisar fornecedor..." oninput="searchFornecedorPlan(this.value)" autocomplete="off"/>
+        <div id="plan-forn-dropdown" class="forn-dropdown hidden"></div>
+      </div>
+      <div id="plan-forn-selected" class="forn-card hidden">
+        <div class="forn-card-row">
+          <div>
+            <div class="forn-card-nome" id="plan-forn-nome-disp"></div>
+            <div class="forn-card-meta"><span id="plan-forn-meta-disp"></span></div>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline" onclick="clearFornecedorPlan()">✕</button>
+        </div>
+      </div>
+      <div id="plan-forn-novo-wrap" class="hidden">
+        <div class="form-row">
+          <div class="form-group flex1"><label>Nome *</label><input id="plan-forn-nome" type="text" placeholder="Nome da empresa..."/></div>
+          <div class="form-group flex1"><label>NUIT</label><input id="plan-forn-nuit" type="text" placeholder="000000000" maxlength="9"/></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group flex1"><label>Contacto</label><input id="plan-forn-contacto" type="tel" placeholder="+258..."/></div>
+          <div class="form-group flex1">
+            <label>Tipo</label>
+            <select id="plan-forn-tipo">
+              <option value="hotel">🏨 Hotel/Alojamento</option>
+              <option value="restaurante">🍽️ Restaurante</option>
+              <option value="transporte">🚗 Transportadora</option>
+              <option value="comunicacao">📞 Comunicações</option>
+              <option value="outro">⚙️ Outros</option>
+            </select>
+          </div>
+        </div>
+        <label class="checkbox-item" style="margin-bottom:8px">
+          <input type="checkbox" id="plan-forn-guardar" checked/> 💾 Guardar para uso futuro
+        </label>
+      </div>
+      <button type="button" class="btn btn-outline btn-sm" id="btn-toggle-plan-forn" onclick="toggleFornecedorPlan()">+ Adicionar Novo Fornecedor</button>
+
+      <div class="form-group" style="margin-top:12px"><label>Notas</label><textarea id="plan-notas" rows="2" placeholder="Informação adicional…"></textarea></div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('modal-plan')">Cancelar</button>

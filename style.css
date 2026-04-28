@@ -1706,6 +1706,80 @@ select {
 }
 
 /* ══════════════════════════════════════════════
+   NAV COLAPSÁVEL
+══════════════════════════════════════════════ */
+.nav-section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  cursor: pointer;
+  user-select: none;
+  transition: color .15s;
+}
+.nav-section-toggle:hover { color: var(--primary); }
+.nav-caret {
+  font-size: 9px;
+  transition: transform .2s;
+}
+.nav-group {
+  overflow: hidden;
+  max-height: 500px;
+  transition: max-height .3s ease, opacity .2s;
+  opacity: 1;
+}
+.nav-group-closed {
+  max-height: 0 !important;
+  opacity: 0;
+}
+.nav-item.nav-sub {
+  padding-left: 28px;
+  font-size: 13px;
+}
+
+/* ══════════════════════════════════════════════
+   MODAL PICKER — Nova Despesa
+══════════════════════════════════════════════ */
+.nova-despesa-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.nova-despesa-opt {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  background: var(--bg-input);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .15s, background .15s;
+  width: 100%;
+}
+.nova-despesa-opt:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+.nova-despesa-icon { font-size: 28px; flex-shrink: 0; }
+.nova-despesa-title {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+}
+.nova-despesa-sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* ══════════════════════════════════════════════
    FORNECEDORES — Pesquisa inline no formulário
 ══════════════════════════════════════════════ */
 .forn-dropdown {

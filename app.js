@@ -78,6 +78,32 @@ function showPage(id) {
   }
 }
 
+// ── SIDEBAR NAV GROUPS (colapsáveis) ──
+function toggleNavGroup(id) {
+  const group = document.getElementById(id);
+  const caretId = 'caret-' + id.replace('nav-', '');
+  const caret = document.getElementById(caretId);
+  if (!group) return;
+  const isOpen = !group.classList.contains('nav-group-closed');
+  group.classList.toggle('nav-group-closed', isOpen);
+  if (caret) caret.textContent = isOpen ? '▶' : '▼';
+}
+
+// ── NOVA DESPESA PICKER ──
+function openNovaDespesaModal() {
+  openModal('modal-nova-despesa');
+}
+function escolherFormulario(tipo) {
+  closeModal('modal-nova-despesa');
+  showCampoForm(tipo);
+}
+
+// ── CAMPO FORM SELECTOR ──
+function showCampoForm(tipo) {
+  showPage('page-campo');
+  setTimeout(() => selectCampoOpcao(tipo), 100);
+}
+
 // ── SIDEBAR ──
 function toggleSidebar() {
   const sb = document.getElementById('sidebar');
@@ -1420,6 +1446,7 @@ function savePlan() {
   const n = parseInt(document.getElementById('plan-pessoas').value) || 1;
   const c = parseFloat(document.getElementById('plan-custo').value) || 0;
   const cur = document.getElementById('plan-moeda').value;
+  const forn = _saveFornecedorPlanInline?.() || null;
   DB.savePlan({
     id: DB.uid(), companyId: currentCompany.id, createdBy: currentUser.id,
     tipo: document.getElementById('plan-tipo').value,
@@ -1428,6 +1455,7 @@ function savePlan() {
     pessoas: n, custo: c, total: n*c, moeda: cur,
     projeto: document.getElementById('plan-projeto').value.trim(),
     notas: document.getElementById('plan-notas').value.trim(),
+    fornecedor: forn ? { id: forn.id, nome: forn.nome, nuit: forn.nuit, tipo: forn.tipo } : null,
     status: 'upcoming',
     createdAt: new Date().toISOString().slice(0,10),
   });
@@ -2232,6 +2260,68 @@ function _saveFornecedorPedidoInline() {
     tipo:      document.getElementById('pedido-forn-tipo')?.value || 'outro',
     modalidade:document.querySelector('input[name="pedido-forn-pag"]:checked')?.value || 'pronto',
     criadoEm:  new Date().toISOString(),
+  };
+  if (guardar) DB.saveFornecedor(f);
+  return f;
+}
+
+// ── Fornecedor no Planeamento ──
+let _fornSelecionadoPlan = null;
+
+function searchFornecedorPlan(q) {
+  const dd = document.getElementById('plan-forn-dropdown');
+  if (!dd || !currentCompany) return;
+  if (!q || q.length < 2) { dd.classList.add('hidden'); return; }
+  const list = DB.getFornecedoresByCompany(currentCompany.id)
+    .filter(f => (f.nome+f.nuit+f.contacto).toLowerCase().includes(q.toLowerCase()))
+    .slice(0, 6);
+  if (list.length === 0) {
+    dd.innerHTML = '<div class="forn-dd-item forn-dd-empty">Nenhum resultado — adicione abaixo</div>';
+  } else {
+    dd.innerHTML = list.map(f => `
+      <div class="forn-dd-item" onclick="selectFornecedorPlan('${f.id}')">
+        <span class="forn-dd-nome">${f.nome}</span>
+        <span class="forn-dd-meta">${FORN_TIPO_LABEL[f.tipo]||''} · ${FORN_PAG_LABEL[f.modalidade]||''}</span>
+      </div>`).join('');
+  }
+  dd.classList.remove('hidden');
+}
+function selectFornecedorPlan(id) {
+  const f = DB.getFornecedor(id);
+  if (!f) return;
+  _fornSelecionadoPlan = f;
+  document.getElementById('plan-forn-search').value = '';
+  document.getElementById('plan-forn-dropdown').classList.add('hidden');
+  document.getElementById('plan-forn-nome-disp').textContent = f.nome;
+  document.getElementById('plan-forn-meta-disp').textContent = `${FORN_TIPO_LABEL[f.tipo]||''} · ${FORN_PAG_LABEL[f.modalidade]||''}`;
+  document.getElementById('plan-forn-selected').classList.remove('hidden');
+  document.getElementById('plan-forn-novo-wrap')?.classList.add('hidden');
+  document.getElementById('btn-toggle-plan-forn').textContent = '+ Adicionar Novo Fornecedor';
+}
+function clearFornecedorPlan() {
+  _fornSelecionadoPlan = null;
+  document.getElementById('plan-forn-search').value = '';
+  document.getElementById('plan-forn-selected').classList.add('hidden');
+}
+function toggleFornecedorPlan() {
+  const wrap = document.getElementById('plan-forn-novo-wrap');
+  const btn  = document.getElementById('btn-toggle-plan-forn');
+  if (!wrap) return;
+  const showing = !wrap.classList.contains('hidden');
+  wrap.classList.toggle('hidden', showing);
+  btn.textContent = showing ? '+ Adicionar Novo Fornecedor' : '− Cancelar';
+}
+function _saveFornecedorPlanInline() {
+  if (_fornSelecionadoPlan) return _fornSelecionadoPlan;
+  const nome = document.getElementById('plan-forn-nome')?.value.trim();
+  if (!nome) return null;
+  const guardar = document.getElementById('plan-forn-guardar')?.checked;
+  const f = {
+    id: DB.uid(), companyId: currentCompany.id, nome,
+    nuit:      document.getElementById('plan-forn-nuit')?.value.trim() || '',
+    contacto:  document.getElementById('plan-forn-contacto')?.value.trim() || '',
+    tipo:      document.getElementById('plan-forn-tipo')?.value || 'outro',
+    modalidade:'pronto', criadoEm: new Date().toISOString(),
   };
   if (guardar) DB.saveFornecedor(f);
   return f;
