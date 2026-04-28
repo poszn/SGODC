@@ -1197,6 +1197,8 @@ select {
 .chain-level-num { font-weight: 700; font-size: 12px; color: var(--primary); min-width: 64px; }
 .chain-level .input { flex: 1; padding: 7px 10px; font-size: 12px; }
 .btn-danger-icon { color: var(--danger); background: none; border: none; cursor: pointer; font-size: 16px; padding: 4px; }
+.btn-danger-outline { background: transparent; color: var(--danger); border: 1.5px solid var(--danger); }
+.btn-danger-outline:hover { background: var(--danger); color: #fff; }
 .recipient-item {
   display: flex; justify-content: space-between; align-items: center;
   padding: 9px 14px; background: var(--bg-page);

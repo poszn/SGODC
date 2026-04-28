@@ -1459,30 +1459,97 @@ function renderAprovacoes() {
 // ── PLANEAMENTO ──
 function renderPlaneamento() {
   if (!currentCompany) return;
-  const plans = DB.getPlansByCompany(currentCompany.id)
-    .sort((a,b) => (a.inicio||'').localeCompare(b.inicio||''));
-  const container = document.getElementById('plan-list');
-  if (plans.length === 0) {
-    container.innerHTML = '<p class="empty-state">Nenhuma atividade planeada.</p>'; return;
-  }
+  const isFunc = currentUser.role === 'funcionario';
+  // Funcionário vê só os seus planos; gestores vêem todos
+  const allPlans = DB.getPlansByCompany(currentCompany.id);
+  const plans = (isFunc
+    ? allPlans.filter(p => p.createdBy === currentUser.id)
+    : allPlans
+  ).sort((a,b) => (a.inicio||'').localeCompare(b.inicio||''));
+
   const planIcons = { campo:'🌍', viagem:'✈️', alojamento:'🏨', formacao:'📚', reuniao:'🤝' };
-  container.innerHTML = plans.map(p => {
-    const icon = planIcons[p.tipo] || '📅';
-    const statusCls = { upcoming:'upcoming', active:'active', done:'done' }[p.status] || 'upcoming';
-    const statusTxt = { upcoming:'Agendado', active:'Em curso', done:'Concluído' }[p.status] || 'Agendado';
-    return `<div class="plan-item">
-      <div class="plan-item-header">
-        <div class="plan-item-title">${icon} ${p.desc}</div>
-        <span class="plan-status ${statusCls}">${statusTxt}</span>
-      </div>
-      <div class="plan-item-meta">
-        📅 ${fmtDate(p.inicio)} → ${fmtDate(p.fim)} &nbsp;·&nbsp; 📍 ${p.local||'—'}
-        &nbsp;·&nbsp; 👥 ${p.pessoas} pessoa${p.pessoas>1?'s':''}
-        &nbsp;·&nbsp; 💰 ${fmtCurrency(p.total||0, p.moeda||'MZN')} estimado
-        ${p.projeto ? ' &nbsp;·&nbsp; 📌 ' + p.projeto : ''}
-      </div>
-    </div>`;
-  }).join('');
+  const statusCls = { upcoming:'upcoming', active:'active', done:'done' };
+  const statusTxt = { upcoming:'Agendado', active:'Em curso', done:'Concluído' };
+
+  // ── Tabela desktop ──
+  const tbody = document.getElementById('plan-table-body');
+  if (tbody) {
+    if (plans.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="12" class="empty-state">Nenhuma atividade planeada.</td></tr>`;
+    } else {
+      tbody.innerHTML = plans.map(p => {
+        const icon    = planIcons[p.tipo] || '📅';
+        const sCls    = statusCls[p.status] || 'upcoming';
+        const sTxt    = statusTxt[p.status] || 'Agendado';
+        const creator = DB.getUser(p.createdBy);
+        const creatorName = creator ? creator.name : '—';
+        const forn    = p.fornecedor ? p.fornecedor.nome : '—';
+        const dept    = p.dept || '—';
+        const deptLabel = { admin:'Administração', financas:'Finanças', operacoes:'Operações', rh:'Recursos Humanos', logistica:'Logística', campo:'Campo' }[dept] || dept;
+        return `<tr>
+          <td>${fmtDate(p.inicio)}</td>
+          <td>${fmtDate(p.fim)}</td>
+          <td>${icon} ${p.tipo||'—'}</td>
+          <td><strong>${p.desc||'—'}</strong>${p.projeto ? `<br/><small>📌 ${p.projeto}</small>` : ''}</td>
+          <td>📍 ${p.local||'—'}</td>
+          <td>${isFunc ? '—' : deptLabel}</td>
+          <td>${isFunc ? '—' : creatorName}</td>
+          <td>👥 ${p.pessoas||1}</td>
+          <td><strong>${fmtCurrency(p.total||0, p.moeda||'MZN')}</strong></td>
+          <td>${forn}</td>
+          <td><span class="plan-status ${sCls}">${sTxt}</span></td>
+          <td>
+            <button class="btn btn-sm btn-outline" onclick="changePlanStatus('${p.id}','done')" title="Marcar concluído">✅</button>
+            <button class="btn btn-sm btn-danger-outline" onclick="deletePlan('${p.id}')" title="Eliminar">🗑️</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+  }
+
+  // ── Cards mobile (fallback) ──
+  const container = document.getElementById('plan-list');
+  if (container) {
+    if (plans.length === 0) {
+      container.innerHTML = '<p class="empty-state">Nenhuma atividade planeada.</p>';
+    } else {
+      container.innerHTML = plans.map(p => {
+        const icon  = planIcons[p.tipo] || '📅';
+        const sCls  = statusCls[p.status] || 'upcoming';
+        const sTxt  = statusTxt[p.status] || 'Agendado';
+        return `<div class="plan-item">
+          <div class="plan-item-header">
+            <div class="plan-item-title">${icon} ${p.desc}</div>
+            <span class="plan-status ${sCls}">${sTxt}</span>
+          </div>
+          <div class="plan-item-meta">
+            📅 ${fmtDate(p.inicio)} → ${fmtDate(p.fim)} &nbsp;·&nbsp; 📍 ${p.local||'—'}
+            &nbsp;·&nbsp; 👥 ${p.pessoas} pessoa${p.pessoas>1?'s':''}
+            &nbsp;·&nbsp; 💰 ${fmtCurrency(p.total||0, p.moeda||'MZN')} estimado
+            ${p.projeto ? ' &nbsp;·&nbsp; 📌 ' + p.projeto : ''}
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
+function changePlanStatus(id, newStatus) {
+  const plans = DB.getPlans();
+  const p = plans.find(x => x.id === id);
+  if (!p) return;
+  p.status = newStatus;
+  DB.savePlan(p);
+  renderPlaneamento();
+  showToast(newStatus === 'done' ? 'Atividade marcada como concluída ✅' : 'Estado atualizado', 'success');
+}
+
+function deletePlan(id) {
+  if (!confirm('Eliminar esta atividade planeada?')) return;
+  const plans = DB.getPlans().filter(p => p.id !== id);
+  DB._set(DB.KEYS.PLANS, plans);
+  renderPlaneamento();
+  showToast('Atividade eliminada', 'info');
 }
 function openPlanModal() {
   ['plan-desc','plan-local','plan-projeto','plan-notas'].forEach(id => {
@@ -1538,9 +1605,9 @@ function setRelPeriod(period) {
   // Actualizar botões depois de navegar
   setTimeout(() => {
     document.querySelectorAll('#page-relatorios .period-btn').forEach(b => b.classList.remove('active'));
-    const periodos = { day:0, week:1, month:2, year:3, all:4 };
+    const periodos = { day:0, week:1, month:2, '3months':3, '6months':4, year:5, all:6 };
     const btns = document.querySelectorAll('#page-relatorios .period-btn');
-    if (btns[periodos[period]]) btns[periodos[period]].classList.add('active');
+    if (btns[periodos[period]] !== undefined) btns[periodos[period]].classList.add('active');
     const lbl = document.getElementById('rel-period-label');
     if (lbl) lbl.textContent = periodLabel(period);
   }, 50);
@@ -1555,10 +1622,40 @@ function setReportPeriod(period, btn) {
   renderRelatorios();
 }
 
+function clearRepFilters() {
+  ['rep-filter-dept','rep-filter-user','rep-filter-tipo'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  renderRelatorios();
+}
+
 function renderRelatorios() {
   if (!currentCompany) return;
   const currency = currentCompany.currency || 'MZN';
   const isFunc   = currentUser.role === 'funcionario';
+
+  // Mostrar barra de filtros para gestores/admins
+  const filtersBar = document.getElementById('rep-filters-bar');
+  if (filtersBar) {
+    if (!isFunc) {
+      filtersBar.classList.remove('hidden');
+      filtersBar.style.display = 'flex';
+      // Popular dropdown de utilizadores da empresa
+      const userSel = document.getElementById('rep-filter-user');
+      if (userSel) {
+        const currentVal = userSel.value;
+        const users = DB.getUsersByCompany(currentCompany.id)
+          .filter(u => u.id !== currentUser.id || !isFunc)
+          .sort((a,b) => a.name.localeCompare(b.name));
+        userSel.innerHTML = '<option value="">Todos os Funcionários</option>' +
+          users.map(u => `<option value="${u.id}" ${u.id===currentVal?'selected':''}>${u.name}</option>`).join('');
+      }
+    } else {
+      filtersBar.classList.add('hidden');
+      filtersBar.style.display = 'none';
+    }
+  }
 
   // Funcionário vê só as suas; gestores vêem todas
   let all = isFunc
@@ -1566,6 +1663,16 @@ function renderRelatorios() {
     : DB.getExpensesByCompany(currentCompany.id);
   all = all.filter(e => e.status !== 'draft');
   let list = filterByPeriod(all, reportPeriod);
+
+  // Aplicar filtros adicionais (managers)
+  if (!isFunc) {
+    const fDept = document.getElementById('rep-filter-dept')?.value || '';
+    const fUser = document.getElementById('rep-filter-user')?.value || '';
+    const fTipo = document.getElementById('rep-filter-tipo')?.value || '';
+    if (fDept) list = list.filter(e => e.dept === fDept);
+    if (fUser) list = list.filter(e => e.userId === fUser);
+    if (fTipo) list = list.filter(e => e.expenseType === fTipo);
+  }
 
   const total = list.reduce((s,e) => s+(e.valor||0), 0);
   const count = list.length;
@@ -1655,21 +1762,28 @@ function renderRelatorios() {
 
   // ── Tabela clicável ──
   const tbody = document.getElementById('rep-table-body');
+  const countEl = document.getElementById('rep-table-count');
   if (!tbody) return;
+  if (countEl) countEl.textContent = list.length;
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" class="empty-state">Sem dados para ${periodLabel(reportPeriod)}.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Sem dados para ${periodLabel(reportPeriod)}.</td></tr>`;
     return;
   }
   const sorted = [...list].sort((a,b) => (b.data||'').localeCompare(a.data||''));
   tbody.innerHTML = sorted.map(e => {
     const user = DB.getUser(e.userId);
+    const userName = user ? user.name : '—';
+    const dept = e.dept || '—';
+    const deptLabel = { admin:'Administração', financas:'Finanças', operacoes:'Operações', rh:'Recursos Humanos', logistica:'Logística', campo:'Campo' }[dept] || dept;
     return `<tr class="table-row-clickable" onclick="openExpenseDetail('${e.id}')">
       <td>${fmtDate(e.data)}</td>
-      <td>${e.type==='procurement'?'🛒 Proc.':(e.type==='campo-pedido'?'📋 Pedido':'🌍 Campo')}</td>
-      <td>${expenseName(e)}${!isFunc && user ? `<br/><small style="color:var(--text-secondary)">${user.name}</small>` : ''}</td>
+      <td>${isFunc ? '—' : userName}</td>
+      <td>${isFunc ? '—' : deptLabel}</td>
+      <td>${expenseName(e)}</td>
       <td>${typeLabel(e.expenseType||e.type)}</td>
       <td><strong>${fmtCurrency(e.valor||0, e.moeda||currency)}</strong></td>
       <td><span class="status-badge ${e.status}">${statusLabel(e.status)}</span></td>
+      <td><button class="btn btn-sm btn-outline" onclick="event.stopPropagation();printExpense('${e.id}')">🖨️</button></td>
     </tr>`;
   }).join('');
 }
@@ -1999,6 +2113,50 @@ function exportReport() {
   a.click();
   URL.revokeObjectURL(url);
   showToast('CSV exportado! ⬇️', 'success');
+}
+
+function printExpense(id) {
+  const e = DB.getExpense(id);
+  if (!e) return;
+  const user = DB.getUser(e.userId);
+  const currency = currentCompany?.currency || 'MZN';
+  const win = window.open('', '_blank', 'width=700,height=900');
+  win.document.write(`
+    <!DOCTYPE html><html><head>
+    <meta charset="utf-8"/>
+    <title>Despesa – ${expenseName(e)}</title>
+    <style>
+      body { font-family: Arial, sans-serif; padding: 30px; font-size: 14px; color: #222; }
+      h2 { color: #1E3A5F; margin-bottom: 4px; }
+      .sub { color: #888; font-size: 12px; margin-bottom: 20px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+      th { background: #1E3A5F; color: #fff; padding: 8px 12px; text-align: left; font-size: 12px; }
+      td { padding: 8px 12px; border-bottom: 1px solid #eee; }
+      tr:nth-child(even) td { background: #f9f9f9; }
+      .status { font-weight: bold; }
+      .footer { margin-top: 30px; font-size: 11px; color: #aaa; text-align: center; }
+    </style></head><body>
+    <h2>${expenseName(e)}</h2>
+    <div class="sub">Despesa ID: ${e.id} &nbsp;·&nbsp; ${currentCompany?.name || ''}</div>
+    <table>
+      <tr><th>Campo</th><th>Valor</th></tr>
+      <tr><td>Data</td><td>${fmtDate(e.data)}</td></tr>
+      <tr><td>Funcionário</td><td>${user ? user.name : '—'}</td></tr>
+      <tr><td>Departamento</td><td>${e.dept || '—'}</td></tr>
+      <tr><td>Tipo</td><td>${e.type === 'procurement' ? 'Procurement' : 'Campo'}</td></tr>
+      <tr><td>Categoria</td><td>${typeLabel(e.expenseType || e.type)}</td></tr>
+      <tr><td>Valor</td><td><strong>${fmtCurrency(e.valor || 0, e.moeda || currency)}</strong></td></tr>
+      <tr><td>Local</td><td>${e.local || '—'}</td></tr>
+      <tr><td>Projeto</td><td>${e.projeto || '—'}</td></tr>
+      <tr><td>Pagamento</td><td>${payMethodLabel(e.paymentMethod)}</td></tr>
+      <tr><td>Estado</td><td class="status">${statusLabel(e.status)}</td></tr>
+      ${e.comentario ? `<tr><td>Comentário</td><td>${e.comentario}</td></tr>` : ''}
+    </table>
+    <div class="footer">Impresso em ${new Date().toLocaleString('pt-PT')} &nbsp;·&nbsp; SGDC Sistema de Gestão de Despesas de Campo</div>
+    <script>window.onload=()=>{window.print();}<\/script>
+    </body></html>
+  `);
+  win.document.close();
 }
 
 function downloadPDFReport() {
