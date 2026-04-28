@@ -54,6 +54,7 @@ function showView(id) {
   document.getElementById(id)?.classList.add('active');
 }
 function showPage(id) {
+  closeAllModals();   // fechar todos os modais antes de navegar
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item, .bnav-btn').forEach(n => n.classList.remove('active'));
   document.getElementById(id)?.classList.add('active');
@@ -130,6 +131,12 @@ function showToast(msg, type = '') {
 // ── MODAL ──
 function closeModal(id) { document.getElementById(id)?.classList.add('hidden'); }
 function openModal(id)  { document.getElementById(id)?.classList.remove('hidden'); }
+function closeAllModals() {
+  // Fecha todos os modais: sistema novo (.modal) e antigo (.modal-overlay)
+  document.querySelectorAll('.modal:not(.hidden), .modal-overlay:not(.hidden)').forEach(m => {
+    m.classList.add('hidden');
+  });
+}
 
 // ── AUTH ──
 function togglePw(inputId, btn) {
