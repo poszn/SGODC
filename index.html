@@ -199,7 +199,10 @@
           <span class="sidebar-sub">Operações & Despesas de Campo</span>
         </div>
       </div>
-      <button class="sidebar-close" onclick="toggleSidebar()">✕</button>
+      <div style="display:flex;gap:6px">
+        <button class="sidebar-close" id="sidebar-collapse-btn" onclick="collapseSidebar()" title="Ocultar menu">◀</button>
+        <button class="sidebar-close" onclick="toggleSidebar()">✕</button>
+      </div>
     </div>
 
     <!-- Navigation -->
@@ -1300,9 +1303,8 @@
     </div>
 
     <!-- Modal Fornecedor -->
-    <div id="modal-fornecedor" class="modal hidden">
-      <div class="modal-backdrop" onclick="closeModal('modal-fornecedor')"></div>
-      <div class="modal-dialog">
+    <div id="modal-fornecedor" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('modal-fornecedor')">
+      <div class="modal-box" onclick="event.stopPropagation()">
         <div class="modal-header">
           <h3 id="modal-forn-title">Novo Fornecedor</h3>
           <button class="modal-close" onclick="closeModal('modal-fornecedor')">✕</button>
@@ -1349,17 +1351,17 @@
               </select>
             </div>
           </div>
-          <div class="form-section-title">🧾 Dados Fiscais (Rodapé da Fatura)</div>
+          <div class="form-section-title">🧾 Dados Fiscais</div>
           <div class="form-group">
-            <label>Rodapé Legal (termos de pagamento, etc.)</label>
+            <label>Rodapé Legal</label>
             <textarea id="modal-forn-rodape" rows="2" placeholder="Ex: Pagamento a 30 dias. IVA incluído conforme legislação vigente em Moçambique."></textarea>
           </div>
           <div class="form-group">
             <label>Observações</label>
-            <textarea id="modal-forn-obs" rows="2" placeholder="Notas internas sobre o fornecedor..."></textarea>
+            <textarea id="modal-forn-obs" rows="2" placeholder="Notas internas..."></textarea>
           </div>
         </div>
-        <div class="modal-footer">
+        <div class="modal-actions">
           <button class="btn btn-outline" onclick="closeModal('modal-fornecedor')">Cancelar</button>
           <button class="btn btn-primary" onclick="saveFornecedorModal()">💾 Guardar</button>
         </div>
@@ -1521,9 +1523,8 @@
 </div>
 
 <!-- Modal: Picker Nova Despesa -->
-<div id="modal-nova-despesa" class="modal hidden">
-  <div class="modal-backdrop" onclick="closeModal('modal-nova-despesa')"></div>
-  <div class="modal-dialog" style="max-width:420px">
+<div id="modal-nova-despesa" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('modal-nova-despesa')">
+  <div class="modal-box" style="max-width:420px" onclick="event.stopPropagation()">
     <div class="modal-header">
       <h3>➕ Nova Despesa</h3>
       <button class="modal-close" onclick="closeModal('modal-nova-despesa')">✕</button>

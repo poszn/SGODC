@@ -1749,6 +1749,37 @@ select {
 }
 
 /* ══════════════════════════════════════════════
+   SIDEBAR COLAPSÁVEL (ocultar menu lateral)
+══════════════════════════════════════════════ */
+.sidebar-collapsed {
+  transform: translateX(-100%) !important;
+}
+@media (min-width: 768px) {
+  .sidebar-collapsed {
+    transform: translateX(calc(-1 * var(--sidebar-w))) !important;
+  }
+  .sidebar-collapsed ~ .main-content,
+  .sidebar-collapsed + .sidebar-overlay + .main-content {
+    margin-left: 0 !important;
+  }
+}
+/* Botão para reabrir sidebar quando está oculta */
+.sidebar-reopen-btn {
+  display: none;
+  position: fixed;
+  top: 14px; left: 8px;
+  z-index: 200;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 16px;
+  box-shadow: var(--shadow);
+}
+
+/* ══════════════════════════════════════════════
    NAV COLAPSÁVEL
 ══════════════════════════════════════════════ */
 .nav-section-toggle {

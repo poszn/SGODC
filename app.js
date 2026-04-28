@@ -100,9 +100,44 @@ function escolherFormulario(tipo) {
 }
 
 // ── CAMPO FORM SELECTOR ──
+// Mostra APENAS o formulário escolhido, esconde o selector de tabs
 function showCampoForm(tipo) {
+  // Navegar para page-campo sem fechar modais (showPage já fecha)
+  closeAllModals();
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item, .bnav-btn').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-campo')?.classList.add('active');
+  if (window.innerWidth < 768) closeSidebar();
+  document.getElementById('user-menu')?.classList.add('hidden');
+
+  // Ocultar selector de tabs — mostrar só o form escolhido
+  const opts = document.querySelector('.campo-opts');
+  if (opts) opts.style.display = 'none';
+
+  const pedido = document.getElementById('form-campo-pedido');
+  const relat  = document.getElementById('form-campo-relatorio');
+  const header = document.querySelector('#page-campo .page-sub');
+
+  if (tipo === 'pedido') {
+    if (pedido) pedido.classList.remove('hidden');
+    if (relat)  relat.classList.add('hidden');
+    if (header) header.textContent = 'Pedido de Aprovação — preencha e envie para autorização';
+  } else {
+    if (pedido) pedido.classList.add('hidden');
+    if (relat)  relat.classList.remove('hidden');
+    if (header) header.textContent = 'Envio de Despesas — registe despesas após a missão';
+  }
+}
+
+// Quando se vai directamente para page-campo (via Início), restaura o selector
+function showCampoPage() {
   showPage('page-campo');
-  setTimeout(() => selectCampoOpcao(tipo), 100);
+  const opts = document.querySelector('.campo-opts');
+  if (opts) opts.style.display = '';
+  document.getElementById('form-campo-pedido')?.classList.remove('hidden');
+  document.getElementById('form-campo-relatorio')?.classList.add('hidden');
+  const header = document.querySelector('#page-campo .page-sub');
+  if (header) header.textContent = 'Escolha o tipo de formulário';
 }
 
 // ── SIDEBAR ──
@@ -115,6 +150,22 @@ function toggleSidebar() {
 function closeSidebar() {
   document.getElementById('sidebar')?.classList.remove('open');
   document.getElementById('sidebar-overlay')?.classList.add('hidden');
+}
+let _sidebarCollapsed = false;
+function collapseSidebar() {
+  const sb   = document.getElementById('sidebar');
+  const main = document.querySelector('.main-content');
+  const btn  = document.getElementById('sidebar-collapse-btn');
+  _sidebarCollapsed = !_sidebarCollapsed;
+  if (_sidebarCollapsed) {
+    sb?.classList.add('sidebar-collapsed');
+    if (main) main.style.marginLeft = '0';
+    if (btn) btn.textContent = '▶';
+  } else {
+    sb?.classList.remove('sidebar-collapsed');
+    if (main) main.style.marginLeft = '';
+    if (btn) btn.textContent = '◀';
+  }
 }
 
 // ── TOAST ──
@@ -129,11 +180,17 @@ function showToast(msg, type = '') {
 }
 
 // ── MODAL ──
-function closeModal(id) { document.getElementById(id)?.classList.add('hidden'); }
-function openModal(id)  { document.getElementById(id)?.classList.remove('hidden'); }
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.add('hidden');
+}
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove('hidden');
+}
 function closeAllModals() {
-  // Fecha todos os modais: sistema novo (.modal) e antigo (.modal-overlay)
-  document.querySelectorAll('.modal:not(.hidden), .modal-overlay:not(.hidden)').forEach(m => {
+  // Fecha TODOS os modais de qualquer sistema (modal-overlay, modal)
+  document.querySelectorAll('.modal-overlay, .modal').forEach(m => {
     m.classList.add('hidden');
   });
 }
