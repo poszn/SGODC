@@ -153,9 +153,13 @@
     <button class="topbar-menu" onclick="toggleSidebar()">☰</button>
 
     <!-- Search (center) -->
-    <div class="topbar-search">
+    <div class="topbar-search" style="position:relative">
       <span class="topbar-search-icon">🔍</span>
-      <input type="text" placeholder="Pesquisar despesas, fornecedores, IDs…" id="topbar-search-input" oninput="handleTopbarSearch(this.value)"/>
+      <input type="text" placeholder="Pesquisar despesas, fornecedores, planos…" id="topbar-search-input"
+        oninput="handleTopbarSearch(this.value)"
+        onkeydown="handleSearchKey(event)"
+        autocomplete="off"/>
+      <div id="search-dropdown" class="search-dropdown hidden"></div>
     </div>
 
     <div class="topbar-right">
@@ -1581,7 +1585,11 @@
   <div class="modal-box" onclick="event.stopPropagation()">
     <div class="modal-header">
       <h3 id="modal-exp-title">Detalhes da Despesa</h3>
-      <button class="modal-close" onclick="closeModal('modal-expense')">✕</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn btn-sm btn-outline" id="modal-exp-hist-btn" onclick="openExpenseHistory(_currentExpId)" title="Histórico">🕓</button>
+        <button class="btn btn-sm btn-outline" id="modal-exp-pdf-btn" onclick="downloadExpensePDF(_currentExpId)" title="Exportar PDF">📄</button>
+        <button class="modal-close" onclick="closeModal('modal-expense')">✕</button>
+      </div>
     </div>
     <div id="modal-exp-body" class="modal-body"></div>
     <div id="modal-exp-actions" class="modal-actions"></div>
@@ -1817,6 +1825,52 @@
     <div id="fraud-modal-body" class="modal-body"></div>
     <div class="modal-actions">
       <button class="btn btn-outline btn-full" onclick="closeModal('modal-fraud')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: EMAIL PREVIEW ── -->
+<div id="modal-email-preview" class="modal-overlay hidden" onclick="closeModal('modal-email-preview')">
+  <div class="modal-box" style="max-width:560px" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>📧 Enviar Relatório por Email</h3>
+      <button class="modal-close" onclick="closeModal('modal-email-preview')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Para (destinatários)</label>
+        <input id="email-prev-to" type="text" placeholder="email1@empresa.com, email2@empresa.com" style="width:100%"/>
+      </div>
+      <div class="form-group">
+        <label>Assunto</label>
+        <input id="email-prev-subject" type="text" style="width:100%"/>
+      </div>
+      <div class="form-group">
+        <label>Corpo do email</label>
+        <textarea id="email-prev-body" rows="10" style="width:100%;font-family:monospace;font-size:12px;resize:vertical"></textarea>
+      </div>
+      <div style="background:var(--bg-page);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:12px;color:var(--text-secondary)">
+        💡 Ao clicar "Abrir no Email" irá abrir o seu cliente de email (Outlook, Gmail, etc.) com o relatório pré-preenchido.
+        Use "Copiar" para copiar o conteúdo manualmente.
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="copyEmailContent()">📋 Copiar</button>
+      <button class="btn btn-primary" onclick="openEmailClient()">📤 Abrir no Email</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: HISTÓRICO DA DESPESA ── -->
+<div id="modal-history" class="modal-overlay hidden" onclick="closeModal('modal-history')">
+  <div class="modal-box" style="max-width:520px" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>🕓 Histórico de Alterações</h3>
+      <button class="modal-close" onclick="closeModal('modal-history')">✕</button>
+    </div>
+    <div id="modal-history-body" class="modal-body"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline btn-full" onclick="closeModal('modal-history')">Fechar</button>
     </div>
   </div>
 </div>

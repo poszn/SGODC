@@ -720,6 +720,7 @@ function renderExpenseList() {
 
 // ── EXPENSE DETAIL MODAL ──
 function openExpenseDetail(id) {
+  _currentExpId = id; // track for PDF/history buttons
   const exp = DB.getExpense(id);
   if (!exp) return;
   // Privacidade: funcionário só pode ver as suas próprias despesas
@@ -868,6 +869,7 @@ function confirmDecision() {
     exp.decidedBy = currentUser.id;
     exp.decisionComment = comment;
     exp.decisionAt = today;
+    _addHistory(exp, exp.status, comment);
     DB.saveExpense(exp);
     notifyExpenseOwner(exp, exp.status);
     _finishDecision(exp.status);
@@ -884,6 +886,7 @@ function confirmDecision() {
       pendingLevel.date    = today;
     }
     exp.status = 'rejected';
+    _addHistory(exp, 'rejected', comment);
     DB.saveExpense(exp);
     notifyExpenseOwner(exp, 'rejected');
     _finishDecision('rejected');
@@ -903,10 +906,12 @@ function confirmDecision() {
   if (nextLevel) {
     nextLevel.status = 'pending';
     exp.status = 'pending';
+    _addHistory(exp, 'approved', `Nível ${pendingLevel.level} (${pendingLevel.label}): ${comment}`);
     notifyNextApprover(exp, nextLevel.level);
   } else {
     // All levels done
     exp.status = 'approved';
+    _addHistory(exp, 'approved', comment);
     notifyExpenseOwner(exp, 'approved');
   }
   DB.saveExpense(exp);
@@ -955,6 +960,7 @@ function sendDraftExpense(id) {
   }));
   exp.status = 'pending';
   exp.submittedAt = new Date().toISOString().slice(0, 10);
+  _addHistory(exp, 'sent_draft', 'Rascunho enviado para aprovação');
   DB.saveExpense(exp);
 
   // Notify level-1 approvers
@@ -1334,6 +1340,8 @@ function submitCampo(status) {
     subtotal,
     ivaValor,
   };
+  _addHistory(exp, status === 'pending' ? 'submitted' : 'draft_saved',
+    status === 'pending' ? 'Despesa enviada para aprovação' : 'Rascunho guardado');
   DB.saveExpense(exp);
 
   if (status === 'pending' && (currentCompany?.approvalChain||[]).length > 0) {
@@ -2954,16 +2962,386 @@ function openGPSForField(targetField) {
   else showToast('GPS não disponível', 'error');
 }
 
-// ── TOPBAR SEARCH ──
+// ══════════════════════════════════════════════
+// ── PESQUISA GLOBAL (dropdown ao vivo) ──
+// ══════════════════════════════════════════════
+let _searchTimer = null;
+let _currentExpId = null; // track currently open expense
+
 function handleTopbarSearch(q) {
-  q = q.trim().toLowerCase();
-  if (!q) return;
-  // Navigate to expenses page and filter by query
+  clearTimeout(_searchTimer);
+  const dd = document.getElementById('search-dropdown');
+  if (!q || q.trim().length < 2) { dd?.classList.add('hidden'); return; }
+  _searchTimer = setTimeout(() => _runGlobalSearch(q.trim()), 200);
+}
+
+function handleSearchKey(e) {
+  if (e.key === 'Escape') {
+    document.getElementById('search-dropdown')?.classList.add('hidden');
+    document.getElementById('topbar-search-input').blur();
+  }
+  if (e.key === 'Enter') {
+    const q = e.target.value.trim();
+    if (q) _goToSearchPage(q);
+  }
+}
+
+function _runGlobalSearch(q) {
+  if (!currentCompany) return;
+  const dd = document.getElementById('search-dropdown');
+  if (!dd) return;
+  const ql = q.toLowerCase();
+  const currency = currentCompany.currency || 'MZN';
+  const isFunc = currentUser.role === 'funcionario';
+  const results = [];
+
+  // Despesas
+  const allExp = isFunc
+    ? DB.getExpensesByUser(currentUser.id)
+    : DB.getExpensesByCompany(currentCompany.id);
+  allExp.filter(e =>
+    expenseName(e).toLowerCase().includes(ql) ||
+    (e.local||'').toLowerCase().includes(ql) ||
+    (e.projeto||'').toLowerCase().includes(ql) ||
+    (e.id||'').toLowerCase().startsWith(ql) ||
+    (e.comentario||'').toLowerCase().includes(ql)
+  ).slice(0, 5).forEach(e => {
+    const u = DB.getUser(e.userId);
+    results.push({
+      icon: expenseIcon(e),
+      title: expenseName(e),
+      sub: `${fmtDate(e.data)} · ${fmtCurrency(e.valor||0, e.moeda||currency)}${u && !isFunc ? ' · '+u.name : ''}`,
+      badge: `<span class="status-badge ${e.status}" style="font-size:10px">${statusLabel(e.status)}</span>`,
+      action: `openExpenseDetail('${e.id}'); closeSearchDropdown();`,
+      type: 'despesa'
+    });
+  });
+
+  // Fornecedores
+  DB.getFornecedoresByCompany(currentCompany.id).filter(f =>
+    (f.nome||'').toLowerCase().includes(ql) ||
+    (f.nuit||'').toLowerCase().includes(ql) ||
+    (f.contacto||'').toLowerCase().includes(ql)
+  ).slice(0, 3).forEach(f => {
+    results.push({
+      icon: '🏢',
+      title: f.nome,
+      sub: `${FORN_TIPO_LABEL[f.tipo]||f.tipo}${f.nuit ? ' · NUIT: '+f.nuit : ''}`,
+      badge: '',
+      action: `showPage('page-fornecedores'); closeSearchDropdown(); setTimeout(()=>{const s=document.getElementById('forn-search-page');if(s){s.value='${f.nome.replace(/'/g,"\\'")}';renderFornecedores();}},200);`,
+      type: 'fornecedor'
+    });
+  });
+
+  // Planos
+  DB.getPlansByCompany(currentCompany.id).filter(p =>
+    isFunc ? p.createdBy === currentUser.id : true
+  ).filter(p =>
+    (p.desc||'').toLowerCase().includes(ql) ||
+    (p.local||'').toLowerCase().includes(ql) ||
+    (p.projeto||'').toLowerCase().includes(ql)
+  ).slice(0, 3).forEach(p => {
+    const planIcons = { campo:'🌍', viagem:'✈️', alojamento:'🏨', formacao:'📚', reuniao:'🤝' };
+    results.push({
+      icon: planIcons[p.tipo] || '📅',
+      title: p.desc,
+      sub: `${fmtDate(p.inicio)} → ${fmtDate(p.fim)} · 📍 ${p.local||'—'}`,
+      badge: '',
+      action: `showPage('page-planeamento'); closeSearchDropdown();`,
+      type: 'plano'
+    });
+  });
+
+  if (results.length === 0) {
+    dd.innerHTML = `<div class="search-dd-empty">Sem resultados para "<strong>${q}</strong>"</div>`;
+  } else {
+    const typeLabel = { despesa:'💳 Despesas', fornecedor:'🏢 Fornecedores', plano:'📅 Planos' };
+    let lastType = null;
+    dd.innerHTML = results.map(r => {
+      const sep = r.type !== lastType ? `<div class="search-dd-sep">${typeLabel[r.type]}</div>` : '';
+      lastType = r.type;
+      return `${sep}<div class="search-dd-item" onclick="${r.action}">
+        <span class="search-dd-icon">${r.icon}</span>
+        <div class="search-dd-info">
+          <div class="search-dd-title">${r.title}</div>
+          <div class="search-dd-sub">${r.sub}</div>
+        </div>
+        ${r.badge}
+      </div>`;
+    }).join('') + `<div class="search-dd-footer" onclick="_goToSearchPage('${q}');closeSearchDropdown()">
+      Ver todos os resultados para "<strong>${q}</strong>" →
+    </div>`;
+  }
+  dd.classList.remove('hidden');
+}
+
+function _goToSearchPage(q) {
+  document.getElementById('search-dropdown')?.classList.add('hidden');
   showPage('page-despesas');
   setTimeout(() => {
     const filterEl = document.getElementById('filter-search');
     if (filterEl) { filterEl.value = q; renderExpenseList(); }
   }, 100);
+}
+
+function closeSearchDropdown() {
+  document.getElementById('search-dropdown')?.classList.add('hidden');
+  document.getElementById('topbar-search-input').value = '';
+}
+
+// Fechar dropdown ao clicar fora
+document.addEventListener('click', e => {
+  const wrap = document.querySelector('.topbar-search');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('search-dropdown')?.classList.add('hidden');
+  }
+});
+
+// ══════════════════════════════════════════════
+// ── HISTÓRICO DE ALTERAÇÕES ──
+// ══════════════════════════════════════════════
+
+function _addHistory(exp, action, detail = '', userId = null) {
+  if (!exp.history) exp.history = [];
+  exp.history.push({
+    ts: new Date().toISOString(),
+    action,
+    detail,
+    userId: userId || currentUser?.id || null,
+  });
+}
+
+function openExpenseHistory(id) {
+  const exp = DB.getExpense(id);
+  if (!exp) return;
+  const body = document.getElementById('modal-history-body');
+  if (!body) return;
+
+  const history = exp.history || [];
+  if (history.length === 0) {
+    body.innerHTML = `<p class="empty-state">Sem histórico registado para esta despesa.</p>
+      <p style="font-size:12px;color:var(--text-secondary);text-align:center">
+        O histórico começa a ser registado a partir de agora em todas as despesas novas e actualizadas.
+      </p>`;
+  } else {
+    const actionLabel = {
+      submitted:  { icon:'📤', label:'Submetida' },
+      resubmitted:{ icon:'🔄', label:'Re-submetida' },
+      approved:   { icon:'✅', label:'Aprovada' },
+      rejected:   { icon:'❌', label:'Rejeitada' },
+      draft_saved:{ icon:'💾', label:'Rascunho guardado' },
+      sent_draft: { icon:'📨', label:'Rascunho enviado' },
+      viewed:     { icon:'👁',  label:'Visualizada' },
+      edited:     { icon:'✏️', label:'Editada' },
+    };
+    body.innerHTML = `<div class="history-timeline">` +
+      [...history].reverse().map(h => {
+        const al = actionLabel[h.action] || { icon:'•', label: h.action };
+        const u = DB.getUser(h.userId);
+        const dt = h.ts ? new Date(h.ts).toLocaleString('pt-PT', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
+        return `<div class="hist-item">
+          <div class="hist-icon">${al.icon}</div>
+          <div class="hist-info">
+            <div class="hist-action">${al.label}</div>
+            ${h.detail ? `<div class="hist-detail">"${h.detail}"</div>` : ''}
+            <div class="hist-meta">${u ? u.name : '—'} · ${dt}</div>
+          </div>
+        </div>`;
+      }).join('') + `</div>`;
+  }
+  openModal('modal-history');
+}
+
+// ══════════════════════════════════════════════
+// ── PDF POR DESPESA ──
+// ══════════════════════════════════════════════
+function downloadExpensePDF(id) {
+  const exp = id ? DB.getExpense(id) : null;
+  if (!exp) return;
+  if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') {
+    printExpense(id); return; // fallback to print
+  }
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+    const W = 210; const m = 15;
+    let y = 15;
+
+    // Header
+    doc.setFillColor(30, 58, 95);
+    doc.rect(0, 0, W, 26, 'F');
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(16); doc.setFont('helvetica','bold');
+    doc.text('SGDC', m, 11);
+    doc.setFontSize(9); doc.setFont('helvetica','normal');
+    doc.text('Sistema de Gestão de Despesas de Campo', m, 17);
+    doc.text(currentCompany?.name || '', W-m, 11, { align:'right' });
+    doc.text(new Date().toLocaleDateString('pt-PT'), W-m, 17, { align:'right' });
+    y = 34;
+
+    // Title
+    doc.setTextColor(30,58,95);
+    doc.setFontSize(13); doc.setFont('helvetica','bold');
+    doc.text(expenseName(exp), m, y); y += 8;
+
+    // Status badge
+    const statusColors = { approved:[16,120,94], pending:[161,98,7], rejected:[185,28,28], draft:[107,114,128] };
+    const sc = statusColors[exp.status] || [107,114,128];
+    doc.setFillColor(...sc);
+    doc.roundedRect(m, y, 40, 7, 2, 2, 'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(8);
+    doc.text(statusLabel(exp.status).replace(/[^\w\sÀ-ÿ]/gu,'').trim(), m+2, y+4.8);
+    y += 12;
+
+    // Details table
+    const user = DB.getUser(exp.userId);
+    const currency = exp.moeda || currentCompany?.currency || 'MZN';
+    const rows = [
+      ['Data', fmtDate(exp.data)],
+      ['Funcionário', user?.name || '—'],
+      ['Tipo', exp.type === 'procurement' ? 'Procurement' : 'Campo'],
+      ['Categoria', typeLabel(exp.expenseType || exp.type)],
+      ['Valor', fmtCurrency(exp.valor||0, currency)],
+      ['Local', exp.local || '—'],
+      ['Projecto', exp.projeto || '—'],
+      ['Pagamento', payMethodLabel(exp.paymentMethod)],
+      ['Departamento', exp.dept || '—'],
+    ];
+    if (exp.comentario) rows.push(['Comentário', exp.comentario]);
+
+    doc.setFontSize(9);
+    rows.forEach((row, i) => {
+      const bg = i%2===0 ? [248,250,252] : [255,255,255];
+      doc.setFillColor(...bg); doc.rect(m, y, W-2*m, 7, 'F');
+      doc.setTextColor(107,114,128); doc.setFont('helvetica','bold');
+      doc.text(row[0], m+2, y+4.8);
+      doc.setTextColor(31,41,55); doc.setFont('helvetica','normal');
+      doc.text(String(row[1]).substring(0,70), m+45, y+4.8);
+      y += 7;
+    });
+
+    // Approval chain
+    if (exp.approvals?.length > 0) {
+      y += 5;
+      doc.setTextColor(30,58,95); doc.setFontSize(10); doc.setFont('helvetica','bold');
+      doc.text('Cadeia de Aprovação', m, y); y += 6;
+      exp.approvals.forEach(a => {
+        const aUser = a.userId ? DB.getUser(a.userId) : null;
+        const st = { approved:'✓ Aprovado', rejected:'✗ Rejeitado', pending:'... Pendente', waiting:'⌛ Aguarda' }[a.status] || a.status;
+        doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(31,41,55);
+        doc.text(`Nível ${a.level} – ${a.label}: ${st}${aUser ? ' por '+aUser.name : ''}${a.comment ? ' ("'+a.comment+'")'  : ''}`, m+3, y);
+        y += 6;
+      });
+    }
+
+    // Footer
+    doc.setFillColor(243,244,246); doc.rect(0,288,W,9,'F');
+    doc.setTextColor(107,114,128); doc.setFontSize(7); doc.setFont('helvetica','normal');
+    doc.text(`SGDC · ${currentCompany?.name||''} · Gerado em ${new Date().toLocaleString('pt-PT')}`, m, 293);
+    doc.text(`ID: ${exp.id}`, W-m, 293, { align:'right' });
+
+    doc.save(`Despesa_${expenseName(exp).replace(/\s+/g,'_')}_${exp.data||'sem-data'}.pdf`);
+    showToast('PDF gerado! 📄', 'success');
+  } catch(err) {
+    console.error(err);
+    printExpense(id); // fallback
+  }
+}
+
+// ══════════════════════════════════════════════
+// ── EMAIL — PREVIEW MODAL ──
+// ══════════════════════════════════════════════
+let _emailPreviewContent = { to:'', subject:'', body:'' };
+
+function sendReportEmail() {
+  if (!currentCompany) return;
+  let list = DB.getExpensesByCompany(currentCompany.id).filter(e => e.status !== 'draft');
+
+  // Apply current filters
+  const fDept = document.getElementById('rep-filter-dept')?.value || '';
+  const fUser = document.getElementById('rep-filter-user')?.value || '';
+  const fTipo = document.getElementById('rep-filter-tipo')?.value || '';
+  list = filterByPeriod(list, reportPeriod);
+  if (fDept) list = list.filter(e => e.dept === fDept);
+  if (fUser) list = list.filter(e => e.userId === fUser);
+  if (fTipo) list = list.filter(e => e.expenseType === fTipo);
+
+  const currency = currentCompany.currency || 'MZN';
+  const approved = list.filter(e => e.status === 'approved');
+  const pending  = list.filter(e => e.status === 'pending');
+  const total    = approved.reduce((s,e) => s+(e.valor||0), 0);
+  const fmt = v => new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2}).format(v)+' '+currency;
+
+  const cfg = typeof Scheduler !== 'undefined' ? Scheduler.getConfig(currentCompany.id) : {};
+  const recipientsDefault = (cfg?.recipients || []).join(', ');
+
+  const subject = `[SGDC] Relatório de Despesas – ${currentCompany.name} – ${periodLabel(reportPeriod)} – ${new Date().toLocaleDateString('pt-PT')}`;
+
+  const top5 = [...approved].sort((a,b)=>(b.valor||0)-(a.valor||0)).slice(0,5);
+  const body = `SGDC – Relatório de Despesas
+Empresa: ${currentCompany.name}
+Período: ${periodLabel(reportPeriod)}
+Data de geração: ${new Date().toLocaleDateString('pt-PT')}
+
+══════════════════════════════════════
+RESUMO
+══════════════════════════════════════
+Total Aprovado:    ${fmt(total)}
+Nº de Despesas:    ${list.length}
+Aprovadas:         ${approved.length}
+Pendentes:         ${pending.length}
+Rejeitadas:        ${list.filter(e=>e.status==='rejected').length}
+Média por Despesa: ${fmt(list.length > 0 ? total/approved.length : 0)}
+
+══════════════════════════════════════
+TOP 5 DESPESAS APROVADAS
+══════════════════════════════════════
+${top5.map((e,i) => {
+  const u = DB.getUser(e.userId);
+  return `${i+1}. ${expenseName(e)} — ${fmt(e.valor||0)}\n   Data: ${e.data||'—'} · Funcionário: ${u?.name||'—'} · Local: ${e.local||'—'}`;
+}).join('\n\n')}
+
+══════════════════════════════════════
+DESPESAS PENDENTES DE APROVAÇÃO
+══════════════════════════════════════
+${pending.length === 0 ? 'Nenhuma despesa pendente.' :
+  pending.slice(0,10).map(e => {
+    const u = DB.getUser(e.userId);
+    return `• ${expenseName(e)} — ${fmt(e.valor||0)} · ${u?.name||'—'} · ${e.data||'—'}`;
+  }).join('\n')}
+
+──────────────────────────────────────
+Este relatório foi gerado automaticamente pelo SGDC.
+Para ver o relatório completo com gráficos, abra a aplicação SGDC.`;
+
+  _emailPreviewContent = { to: recipientsDefault, subject, body };
+
+  document.getElementById('email-prev-to').value      = recipientsDefault;
+  document.getElementById('email-prev-subject').value = subject;
+  document.getElementById('email-prev-body').value    = body;
+
+  openModal('modal-email-preview');
+}
+
+function copyEmailContent() {
+  const body = document.getElementById('email-prev-body')?.value || '';
+  navigator.clipboard.writeText(body).then(() => {
+    showToast('Conteúdo copiado para a área de transferência! 📋', 'success');
+  }).catch(() => {
+    document.getElementById('email-prev-body').select();
+    document.execCommand('copy');
+    showToast('Copiado! 📋', 'success');
+  });
+}
+
+function openEmailClient() {
+  const to      = document.getElementById('email-prev-to')?.value || '';
+  const subject = document.getElementById('email-prev-subject')?.value || '';
+  const body    = document.getElementById('email-prev-body')?.value || '';
+  const url = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  window.location.href = url;
+  closeModal('modal-email-preview');
+  showToast('A abrir cliente de email… 📧', 'info');
 }
 
 // ── SERVICE WORKER ──
