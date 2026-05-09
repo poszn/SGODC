@@ -67,11 +67,11 @@
       <button class="btn btn-outline btn-full" onclick="showView('view-register')">Registar nova empresa</button>
       <div class="demo-hint">
         <strong>Demo rápido:</strong><br/>
-        Admin: <code>gestor@sgodc.demo</code> / <code>demo123</code><br/>
-        Director: <code>director@sgodc.demo</code> / <code>demo123</code><br/>
-        Coordenador: <code>coord@sgodc.demo</code> / <code>demo123</code><br/>
-        Supervisor: <code>super@sgodc.demo</code> / <code>demo123</code><br/>
-        Funcionário: <code>func@sgodc.demo</code> / <code>demo123</code>
+        Admin: <code>admin@sgdc.demo</code> / <code>demo123</code><br/>
+        Gestor: <code>gestor@sgdc.demo</code> / <code>demo123</code><br/>
+        Director: <code>director@sgdc.demo</code> / <code>demo123</code><br/>
+        Financeiro: <code>financeiro@sgdc.demo</code> / <code>demo123</code><br/>
+        Funcionário: <code>func@sgdc.demo</code> / <code>demo123</code>
       </div>
     </div>
   </div>
@@ -153,9 +153,13 @@
     <button class="topbar-menu" onclick="toggleSidebar()">☰</button>
 
     <!-- Search (center) -->
-    <div class="topbar-search">
+    <div class="topbar-search" style="position:relative">
       <span class="topbar-search-icon">🔍</span>
-      <input type="text" placeholder="Pesquisar despesas, fornecedores, IDs…" id="topbar-search-input" oninput="handleTopbarSearch(this.value)"/>
+      <input type="text" placeholder="Pesquisar despesas, fornecedores, planos…" id="topbar-search-input"
+        oninput="handleTopbarSearch(this.value)"
+        onkeydown="handleSearchKey(event)"
+        autocomplete="off"/>
+      <div id="search-dropdown" class="search-dropdown hidden"></div>
     </div>
 
     <div class="topbar-right">
@@ -199,7 +203,10 @@
           <span class="sidebar-sub">Operações & Despesas de Campo</span>
         </div>
       </div>
-      <button class="sidebar-close" onclick="toggleSidebar()">✕</button>
+      <div style="display:flex;gap:6px">
+        <button class="sidebar-close" id="sidebar-collapse-btn" onclick="collapseSidebar()" title="Ocultar menu">◀</button>
+        <button class="sidebar-close" onclick="toggleSidebar()">✕</button>
+      </div>
     </div>
 
     <!-- Navigation -->
@@ -208,14 +215,18 @@
         <span class="nav-icon">🏠</span><span>Início</span>
       </button>
 
-      <!-- SUBMETER -->
-      <div class="nav-section">SUBMETER</div>
-      <button class="nav-item" data-page="page-campo" onclick="showPage('page-campo')">
-        <span class="nav-icon">🌍</span><span>Trabalho de Campo</span>
-      </button>
-      <button class="nav-item manager-only hidden" data-page="page-procurement" onclick="showPage('page-procurement')">
-        <span class="nav-icon">📤</span><span>Enviar Despesa</span>
-      </button>
+      <!-- SUBMETER (colapsável) -->
+      <div class="nav-section-toggle" onclick="toggleNavGroup('nav-submeter')">
+        <span>SUBMETER</span><span class="nav-caret" id="caret-submeter">▼</span>
+      </div>
+      <div class="nav-group" id="nav-submeter">
+        <button class="nav-item nav-sub" onclick="showCampoForm('pedido')">
+          <span class="nav-icon">📋</span><span>Pedido de Aprovação</span>
+        </button>
+        <button class="nav-item nav-sub" onclick="showCampoForm('relatorio')">
+          <span class="nav-icon">📤</span><span>Envio de Despesas</span>
+        </button>
+      </div>
 
       <!-- APROVAÇÃO -->
       <div class="nav-section manager-only hidden">APROVAÇÃO</div>
@@ -227,23 +238,33 @@
       <!-- PLANEAMENTO -->
       <div class="nav-section">PLANEAMENTO</div>
       <button class="nav-item" data-page="page-planeamento" onclick="showPage('page-planeamento')">
-        <span class="nav-icon">📅</span><span>Planeamento</span>
+        <span class="nav-icon">📅</span><span>Planeamento de Saída</span>
       </button>
 
-      <!-- RELATÓRIOS -->
-      <div class="nav-section">RELATÓRIOS</div>
-      <button class="nav-item" data-page="page-relatorios" onclick="setRelPeriod('day')">
-        <span class="nav-icon">📆</span><span>Diários</span>
-      </button>
-      <button class="nav-item" data-page="page-relatorios" onclick="setRelPeriod('week')">
-        <span class="nav-icon">🗓️</span><span>Semanais</span>
-      </button>
-      <button class="nav-item" data-page="page-relatorios" onclick="setRelPeriod('month')">
-        <span class="nav-icon">📊</span><span>Mensais</span>
-      </button>
-      <button class="nav-item" data-page="page-relatorios" onclick="setRelPeriod('year')">
-        <span class="nav-icon">📈</span><span>Anuais</span>
-      </button>
+      <!-- RELATÓRIOS (colapsável) -->
+      <div class="nav-section-toggle" onclick="toggleNavGroup('nav-relatorios')">
+        <span>RELATÓRIOS</span><span class="nav-caret" id="caret-relatorios">▼</span>
+      </div>
+      <div class="nav-group" id="nav-relatorios">
+        <button class="nav-item nav-sub" data-page="page-relatorios" onclick="setRelPeriod('day')">
+          <span class="nav-icon">📆</span><span>Diários</span>
+        </button>
+        <button class="nav-item nav-sub" data-page="page-relatorios" onclick="setRelPeriod('week')">
+          <span class="nav-icon">🗓️</span><span>Semanais</span>
+        </button>
+        <button class="nav-item nav-sub" data-page="page-relatorios" onclick="setRelPeriod('month')">
+          <span class="nav-icon">📊</span><span>Mensais</span>
+        </button>
+        <button class="nav-item nav-sub" data-page="page-relatorios" onclick="setRelPeriod('3months')">
+          <span class="nav-icon">📅</span><span>3 Meses</span>
+        </button>
+        <button class="nav-item nav-sub" data-page="page-relatorios" onclick="setRelPeriod('6months')">
+          <span class="nav-icon">📅</span><span>6 Meses</span>
+        </button>
+        <button class="nav-item nav-sub" data-page="page-relatorios" onclick="setRelPeriod('year')">
+          <span class="nav-icon">📈</span><span>Anuais</span>
+        </button>
+      </div>
 
       <!-- ANÁLISE -->
       <div class="nav-section">ANÁLISE</div>
@@ -262,6 +283,9 @@
       <button class="nav-item" data-page="page-despesas" onclick="showPage('page-despesas')">
         <span class="nav-icon">📁</span><span>Todas as Despesas</span>
       </button>
+      <button class="nav-item" data-page="page-fornecedores" onclick="showPage('page-fornecedores')">
+        <span class="nav-icon">🏢</span><span>Fornecedores</span>
+      </button>
       <button class="nav-item" data-page="page-notificacoes" onclick="showPage('page-notificacoes')">
         <span class="nav-icon">🔔</span><span>Notificações</span>
         <span id="notif-count-nav" class="badge hidden" style="position:static;margin-left:auto;border:none;">0</span>
@@ -279,7 +303,7 @@
 
     <!-- CTA button at bottom -->
     <div class="sidebar-cta">
-      <button class="sidebar-cta-btn" onclick="showPage('page-procurement')">
+      <button class="sidebar-cta-btn" onclick="openNovaDespesaModal()">
         + Nova Despesa
       </button>
     </div>
@@ -296,7 +320,7 @@
           <h2 id="dash-greeting">Bom dia 👋</h2>
           <p class="page-sub" id="dash-date"></p>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="showPage('page-procurement')">+ Nova Despesa</button>
+        <button class="btn btn-primary btn-sm" onclick="openNovaDespesaModal()">+ Nova Despesa</button>
       </div>
 
       <!-- Período selector -->
@@ -307,69 +331,89 @@
         <button class="period-btn"        id="dash-period-ano"    onclick="setDashPeriod('year',this)">Este Ano</button>
       </div>
 
-      <!-- Secção pessoal (todos vêem) -->
-      <div class="dash-section-label">As minhas despesas</div>
-      <div class="stats-grid">
-        <div class="stat-card blue" onclick="showPage('page-despesas')" style="cursor:pointer" title="Ver despesas">
-          <div class="stat-icon">💰</div>
-          <div class="stat-info">
-            <div class="stat-label" id="stat-total-label">Total do Período</div>
-            <div class="stat-value" id="stat-total">0 MZN</div>
+      <!-- Tabs de vista: Pessoal | Empresa (só para managers/admin) -->
+      <div class="dash-view-tabs manager-only hidden" id="dash-view-tabs">
+        <button class="dash-view-tab active" id="dash-tab-mine" onclick="switchDashView('mine')">
+          <span class="dvt-icon">👤</span>
+          <span class="dvt-label">Minhas Despesas</span>
+        </button>
+        <button class="dash-view-tab" id="dash-tab-empresa" onclick="switchDashView('empresa')">
+          <span class="dvt-icon">🏢</span>
+          <span class="dvt-label">Visão da Empresa</span>
+        </button>
+      </div>
+
+      <!-- Secção pessoal -->
+      <div id="dash-section-mine">
+        <div class="stats-grid">
+          <div class="stat-card blue" onclick="goToDespesasMine()" style="cursor:pointer" title="Ver as minhas despesas">
+            <div class="stat-icon">💰</div>
+            <div class="stat-info">
+              <div class="stat-label" id="stat-total-label">Total do Período</div>
+              <div class="stat-value" id="stat-total">0 MZN</div>
+            </div>
+          </div>
+          <div class="stat-card green" onclick="goToDespesasMineFiltered('approved')" style="cursor:pointer" title="Ver aprovadas">
+            <div class="stat-icon">✅</div>
+            <div class="stat-info">
+              <div class="stat-label">Aprovadas</div>
+              <div class="stat-value" id="stat-approved">0</div>
+            </div>
+          </div>
+          <div class="stat-card amber" onclick="goToDespesasMineFiltered('pending')" style="cursor:pointer" title="Ver pendentes">
+            <div class="stat-icon">⏳</div>
+            <div class="stat-info">
+              <div class="stat-label">Pendentes</div>
+              <div class="stat-value" id="stat-pending">0</div>
+            </div>
+          </div>
+          <div class="stat-card red" onclick="goToDespesasMineFiltered('rejected')" style="cursor:pointer" title="Ver rejeitadas">
+            <div class="stat-icon">❌</div>
+            <div class="stat-info">
+              <div class="stat-label">Rejeitadas</div>
+              <div class="stat-value" id="stat-rejected">0</div>
+            </div>
           </div>
         </div>
-        <div class="stat-card green" onclick="showPageFiltered('approved')" style="cursor:pointer" title="Ver aprovadas">
-          <div class="stat-icon">✅</div>
-          <div class="stat-info">
-            <div class="stat-label">Aprovadas</div>
-            <div class="stat-value" id="stat-approved">0</div>
-          </div>
-        </div>
-        <div class="stat-card amber" onclick="showPageFiltered('pending')" style="cursor:pointer" title="Ver pendentes">
-          <div class="stat-icon">⏳</div>
-          <div class="stat-info">
-            <div class="stat-label">Pendentes</div>
-            <div class="stat-value" id="stat-pending">0</div>
-          </div>
-        </div>
-        <div class="stat-card red" onclick="showPageFiltered('rejected')" style="cursor:pointer" title="Ver rejeitadas">
-          <div class="stat-icon">❌</div>
-          <div class="stat-info">
-            <div class="stat-label">Rejeitadas</div>
-            <div class="stat-value" id="stat-rejected">0</div>
-          </div>
+        <div style="text-align:right;margin-top:4px">
+          <button class="btn btn-ghost btn-sm" onclick="goToDespesasMine()">Ver todas as minhas despesas →</button>
         </div>
       </div>
 
       <!-- Secção empresa (gestores/admin vêem) -->
-      <div class="dash-section-label manager-only hidden">Visão geral da empresa</div>
-      <div class="stats-grid manager-only hidden" id="stats-empresa">
-        <div class="stat-card purple">
-          <div class="stat-icon">🏢</div>
-          <div class="stat-info">
-            <div class="stat-label">Total Empresa</div>
-            <div class="stat-value" id="stat-emp-total">0 MZN</div>
+      <div id="dash-section-empresa" class="manager-only hidden">
+        <div class="stats-grid" id="stats-empresa">
+          <div class="stat-card purple" onclick="goToDespesasEmpresa()" style="cursor:pointer" title="Ver todas as despesas">
+            <div class="stat-icon">🏢</div>
+            <div class="stat-info">
+              <div class="stat-label">Total Empresa</div>
+              <div class="stat-value" id="stat-emp-total">0 MZN</div>
+            </div>
+          </div>
+          <div class="stat-card green" onclick="goToDespesasEmpresaFiltered('approved')" style="cursor:pointer" title="Ver aprovadas da empresa">
+            <div class="stat-icon">✅</div>
+            <div class="stat-info">
+              <div class="stat-label">Aprovadas</div>
+              <div class="stat-value" id="stat-emp-approved">0</div>
+            </div>
+          </div>
+          <div class="stat-card amber" onclick="goToDespesasEmpresaFiltered('pending')" style="cursor:pointer" title="Ver pendentes da empresa">
+            <div class="stat-icon">⏳</div>
+            <div class="stat-info">
+              <div class="stat-label">Aguardam Aprovação</div>
+              <div class="stat-value" id="stat-emp-pending">0</div>
+            </div>
+          </div>
+          <div class="stat-card blue">
+            <div class="stat-icon">👥</div>
+            <div class="stat-info">
+              <div class="stat-label">Utilizadores Activos</div>
+              <div class="stat-value" id="stat-emp-users">0</div>
+            </div>
           </div>
         </div>
-        <div class="stat-card green">
-          <div class="stat-icon">✅</div>
-          <div class="stat-info">
-            <div class="stat-label">Aprovadas</div>
-            <div class="stat-value" id="stat-emp-approved">0</div>
-          </div>
-        </div>
-        <div class="stat-card amber">
-          <div class="stat-icon">⏳</div>
-          <div class="stat-info">
-            <div class="stat-label">Aguardam Aprovação</div>
-            <div class="stat-value" id="stat-emp-pending">0</div>
-          </div>
-        </div>
-        <div class="stat-card blue">
-          <div class="stat-icon">👥</div>
-          <div class="stat-info">
-            <div class="stat-label">Utilizadores Activos</div>
-            <div class="stat-value" id="stat-emp-users">0</div>
-          </div>
+        <div style="text-align:right;margin-top:4px">
+          <button class="btn btn-ghost btn-sm" onclick="goToDespesasEmpresa()">Ver todas as despesas da empresa →</button>
         </div>
       </div>
 
@@ -704,7 +748,77 @@
         </div>
 
 
-        <div class="form-group">
+        <!-- ── FORNECEDOR (Pedido) ── -->
+        <div class="form-section-title">🏢 Dados do Fornecedor</div>
+        <div class="form-group" style="position:relative">
+          <label>Pesquisar Fornecedor</label>
+          <input id="pedido-forn-search" type="text" placeholder="Nome, NUIT ou tipo..." oninput="searchFornecedorPedido(this.value)" autocomplete="off"/>
+          <div id="pedido-forn-dropdown" class="forn-dropdown hidden"></div>
+        </div>
+        <div id="pedido-forn-selected" class="forn-card hidden">
+          <div class="forn-card-row">
+            <div>
+              <div class="forn-card-nome" id="pedido-forn-nome-disp"></div>
+              <div class="forn-card-meta">
+                <span id="pedido-forn-nuit-disp"></span>
+                <span id="pedido-forn-tipo-disp"></span>
+                <span id="pedido-forn-pag-disp"></span>
+              </div>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline" onclick="clearFornecedorPedido()">✕ Remover</button>
+          </div>
+        </div>
+        <div id="pedido-forn-novo-wrap" class="hidden">
+          <div class="form-section-title" style="font-size:13px;margin-top:8px">➕ Novo Fornecedor</div>
+          <div class="form-row">
+            <div class="form-group flex1">
+              <label>Nome da Empresa *</label>
+              <input id="pedido-forn-nome" type="text" placeholder="Ex: Hotel Central, Transportes Maputo…"/>
+            </div>
+            <div class="form-group flex1">
+              <label>NUIT</label>
+              <input id="pedido-forn-nuit" type="text" placeholder="000000000" maxlength="9"/>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex1">
+              <label>Contacto</label>
+              <input id="pedido-forn-contacto" type="tel" placeholder="+258 84 000 0000"/>
+            </div>
+            <div class="form-group flex1">
+              <label>Tipo de Fornecedor</label>
+              <select id="pedido-forn-tipo">
+                <option value="hotel">🏨 Hotel / Alojamento</option>
+                <option value="restaurante">🍽️ Restaurante / Alimentação</option>
+                <option value="transporte">🚗 Transportadora</option>
+                <option value="comunicacao">📞 Comunicações</option>
+                <option value="outro">⚙️ Outro</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Modalidade de Pagamento</label>
+            <div class="radio-group">
+              <label class="radio-opt">
+                <input type="radio" name="pedido-forn-pag" value="pronto" checked/>
+                <span class="radio-box"></span>
+                <span class="radio-label">💵 Pronto Pagamento</span>
+              </label>
+              <label class="radio-opt">
+                <input type="radio" name="pedido-forn-pag" value="credito"/>
+                <span class="radio-box"></span>
+                <span class="radio-label">🏦 A Prazo (Crédito)</span>
+              </label>
+            </div>
+          </div>
+          <label class="checkbox-item" style="margin-bottom:12px">
+            <input type="checkbox" id="pedido-forn-guardar" checked/>
+            💾 Guardar fornecedor para uso futuro
+          </label>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-toggle-pedido-forn" onclick="toggleNovoFornecedorPedido()">+ Adicionar Novo Fornecedor</button>
+
+        <div class="form-group" style="margin-top:16px">
           <label>Método de Pagamento Previsto</label>
           <select id="pedido-pay-method" onchange="onPayMethodChange('pedido-pay-method','pedido-phone-wrap')">
             <option value="cash">💵 Numerário</option>
@@ -810,13 +924,133 @@
             <option value="EUR">EUR – Euro</option>
           </select>
         </div>
-        <!-- GPS -->
+        <!-- ── FORNECEDOR ── -->
+        <div class="form-section-title">🏢 Dados do Fornecedor</div>
+        <div class="form-group" style="position:relative">
+          <label>Pesquisar Fornecedor</label>
+          <input id="campo-forn-search" type="text" placeholder="Nome, NUIT ou tipo..." oninput="searchFornecedor(this.value)" autocomplete="off"/>
+          <div id="campo-forn-dropdown" class="forn-dropdown hidden"></div>
+        </div>
+        <div id="campo-forn-selected" class="forn-card hidden">
+          <div class="forn-card-row">
+            <div>
+              <div class="forn-card-nome" id="campo-forn-nome-disp"></div>
+              <div class="forn-card-meta">
+                <span id="campo-forn-nuit-disp"></span>
+                <span id="campo-forn-tipo-disp"></span>
+                <span id="campo-forn-pag-disp"></span>
+              </div>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline" onclick="clearFornecedor()">✕ Remover</button>
+          </div>
+        </div>
+        <div id="campo-forn-novo-wrap" class="hidden">
+          <div class="form-section-title" style="font-size:13px;margin-top:8px">➕ Novo Fornecedor</div>
+          <div class="form-row">
+            <div class="form-group flex1">
+              <label>Nome da Empresa / Hotel / Restaurante *</label>
+              <input id="campo-forn-nome" type="text" placeholder="Ex: Hotel Central, Transportes Maputo…"/>
+            </div>
+            <div class="form-group flex1">
+              <label>NUIT</label>
+              <input id="campo-forn-nuit" type="text" placeholder="000000000" maxlength="9"/>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex1">
+              <label>Contacto</label>
+              <input id="campo-forn-contacto" type="tel" placeholder="+258 84 000 0000"/>
+            </div>
+            <div class="form-group flex1">
+              <label>Tipo de Fornecedor</label>
+              <select id="campo-forn-tipo">
+                <option value="hotel">🏨 Hotel / Alojamento</option>
+                <option value="restaurante">🍽️ Restaurante / Alimentação</option>
+                <option value="transporte">🚗 Transportadora</option>
+                <option value="comunicacao">📞 Comunicações</option>
+                <option value="outro">⚙️ Outro</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Modalidade de Pagamento</label>
+            <div class="radio-group">
+              <label class="radio-opt">
+                <input type="radio" name="campo-forn-pag" id="campo-forn-pronto" value="pronto" checked/>
+                <span class="radio-box"></span>
+                <span class="radio-label">💵 Pronto Pagamento</span>
+              </label>
+              <label class="radio-opt">
+                <input type="radio" name="campo-forn-pag" id="campo-forn-credito" value="credito"/>
+                <span class="radio-box"></span>
+                <span class="radio-label">🏦 A Prazo (Crédito)</span>
+              </label>
+            </div>
+          </div>
+          <label class="checkbox-item" style="margin-bottom:12px">
+            <input type="checkbox" id="campo-forn-guardar" checked/>
+            💾 Guardar fornecedor para uso futuro
+          </label>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-toggle-forn" onclick="toggleNovoFornecedor()">+ Adicionar Novo Fornecedor</button>
+
+        <!-- ── FATURAÇÃO / IVA ── -->
+        <div class="form-section-title" style="margin-top:20px">🧾 Faturação</div>
+        <div class="form-row">
+          <div class="form-group flex1">
+            <label>Tipo de Documento</label>
+            <select id="campo-doc-tipo">
+              <option value="fatura">📄 Fatura</option>
+              <option value="recibo">🧾 Recibo</option>
+              <option value="fatura-recibo">📋 Fatura-Recibo</option>
+            </select>
+          </div>
+          <div class="form-group flex1">
+            <label>Nº do Documento</label>
+            <input id="campo-doc-num" type="text" placeholder="Auto-gerado ou inserir manualmente"/>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group flex1">
+            <label>IVA (Moçambique)</label>
+            <div class="radio-group">
+              <label class="radio-opt">
+                <input type="radio" name="campo-iva" value="sim" checked onchange="onIVAChange()"/>
+                <span class="radio-box"></span>
+                <span class="radio-label">✔ Com IVA</span>
+              </label>
+              <label class="radio-opt">
+                <input type="radio" name="campo-iva" value="nao" onchange="onIVAChange()"/>
+                <span class="radio-box"></span>
+                <span class="radio-label">Sem IVA</span>
+              </label>
+            </div>
+          </div>
+          <div class="form-group flex1" id="campo-iva-taxa-wrap">
+            <label>Taxa IVA (%)</label>
+            <input id="campo-iva-taxa" type="number" value="16" min="0" max="100" oninput="calcCampoTotal()"/>
+          </div>
+        </div>
+        <div class="form-group" id="campo-iva-regime-wrap">
+          <label>Regime Fiscal</label>
+          <select id="campo-iva-regime">
+            <option value="normal">Regime Normal (geral)</option>
+            <option value="simplificado">Regime Simplificado</option>
+          </select>
+        </div>
+        <div class="iva-banner" id="campo-iva-banner">
+          <div class="iva-row"><span>Subtotal (sem IVA)</span><span id="campo-subtotal-disp">0.00 MZN</span></div>
+          <div class="iva-row"><span>IVA (<span id="campo-iva-pct-label">16</span>%)</span><span id="campo-iva-valor-disp">0.00 MZN</span></div>
+          <div class="iva-row iva-total"><span>💰 Total com IVA</span><span id="campo-total-iva-disp">0.00 MZN</span></div>
+        </div>
+
+        <!-- GPS Coordenadas -->
         <div class="form-group">
           <div class="form-label-row">
-            <label>📍 Distância Percorrida (km)</label>
-            <button type="button" class="btn btn-sm btn-outline" onclick="openGPSForField('campo-km')">🛰️ Rastrear GPS</button>
+            <label>📍 Localização GPS (coordenadas)</label>
+            <button type="button" class="btn btn-sm btn-outline" onclick="captureGPSCoords('campo-gps')">📍 Capturar</button>
           </div>
-          <input id="campo-km" type="number" min="0" step="0.01" placeholder="0.00 km (opcional)"/>
+          <input id="campo-gps" type="text" placeholder="Ex: -25.9629, 32.5732 (colar ou capturar)" readonly onclick="this.removeAttribute('readonly')" style="cursor:text"/>
         </div>
         <!-- Payment method -->
         <div class="form-group">
@@ -860,9 +1094,16 @@
       </div>
     </div>
 
-    <!-- ── MINHAS DESPESAS ── -->
+    <!-- ── TODAS AS DESPESAS ── -->
     <div id="page-despesas" class="page">
-      <div class="page-header"><h2>📁 As minhas despesas</h2></div>
+      <div class="page-header">
+        <h2 id="despesas-page-title">📁 As minhas despesas</h2>
+      </div>
+      <!-- Tabs para gestores/admin: Minhas Despesas | Toda a Empresa -->
+      <div class="page-tabs manager-only hidden" id="despesas-tabs" style="margin-bottom:12px">
+        <button class="page-tab active" id="tab-desp-mine" onclick="switchDespesasTab('mine')">👤 Minhas Despesas</button>
+        <button class="page-tab" id="tab-desp-empresa" onclick="switchDespesasTab('empresa')">🏢 Toda a Empresa</button>
+      </div>
       <div class="filters-bar">
         <select id="filter-status" onchange="renderExpenseList()">
           <option value="">Todos os estados</option>
@@ -875,6 +1116,9 @@
           <option value="">Todos os tipos</option>
           <option value="procurement">Procurement</option>
           <option value="campo">Campo</option>
+        </select>
+        <select id="filter-user" onchange="renderExpenseList()" class="manager-only hidden">
+          <option value="">Todos os Funcionários</option>
         </select>
         <input id="filter-search" type="text" placeholder="🔍 Pesquisar…" oninput="renderExpenseList()"/>
       </div>
@@ -904,10 +1148,62 @@
     <!-- ── PLANEAMENTO ── -->
     <div id="page-planeamento" class="page">
       <div class="page-header">
-        <h2>📅 Planeamento</h2>
-        <button class="btn btn-primary btn-sm" onclick="openPlanModal()">+ Nova Atividade</button>
+        <div>
+          <h2>📅 Planeamento de Saída</h2>
+          <p class="page-sub">Lista de todas as saídas planeadas</p>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-outline btn-sm" onclick="window.print()">🖨️ Imprimir</button>
+          <button class="btn btn-primary btn-sm" onclick="openPlanModal()">+ Nova Atividade</button>
+        </div>
       </div>
-      <div id="plan-list">
+      <!-- Filtros para managers -->
+      <div class="filters-bar manager-only hidden" style="margin-bottom:12px;flex-wrap:wrap;gap:8px">
+        <select id="plan-filter-status" onchange="renderPlaneamento()" style="flex:1;min-width:140px">
+          <option value="">Todos os estados</option>
+          <option value="upcoming">🗓️ Próximas</option>
+          <option value="active">▶ Activa</option>
+          <option value="done">✅ Concluída</option>
+          <option value="cancelled">❌ Cancelada</option>
+        </select>
+        <select id="plan-filter-tipo" onchange="renderPlaneamento()" style="flex:1;min-width:140px">
+          <option value="">Todos os tipos</option>
+          <option value="campo">🌍 Campo</option>
+          <option value="viagem">✈️ Viagem</option>
+          <option value="alojamento">🏨 Alojamento</option>
+          <option value="formacao">📚 Formação</option>
+          <option value="reuniao">🤝 Reunião</option>
+        </select>
+        <input type="text" id="plan-filter-search" placeholder="🔍 Pesquisar..." oninput="renderPlaneamento()" style="flex:1;min-width:180px"/>
+      </div>
+      <!-- Tabela de planeamentos -->
+      <div class="card">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Data Início</th>
+                <th>Data Fim</th>
+                <th>Tipo</th>
+                <th>Descrição</th>
+                <th>Local</th>
+                <th>Departamento</th>
+                <th>Solicitante</th>
+                <th>Pessoas</th>
+                <th>Custo Est.</th>
+                <th>Fornecedor</th>
+                <th>Estado</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="plan-table-body">
+              <tr><td colspan="12" class="empty-state">Nenhuma atividade planeada.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <!-- Cards para mobile -->
+      <div id="plan-list" style="display:none">
         <p class="empty-state">Nenhuma atividade planeada.</p>
       </div>
     </div>
@@ -920,16 +1216,43 @@
           <p class="page-sub" id="rel-period-label">Período actual</p>
         </div>
         <div class="header-actions">
+          <button class="btn btn-outline btn-sm" onclick="window.print()">🖨️ Imprimir</button>
           <button class="btn btn-outline btn-sm" onclick="exportReport()">⬇️ CSV</button>
           <button class="btn btn-primary btn-sm" onclick="downloadPDFReport()">📄 PDF</button>
           <button class="btn btn-outline btn-sm manager-only hidden" onclick="sendReportEmail()">📧 Email</button>
         </div>
+      </div>
+      <!-- Filtros de agrupamento (managers) -->
+      <div class="filters-bar manager-only hidden" id="rep-filters-bar" style="margin-bottom:12px;flex-wrap:wrap;gap:8px">
+        <select id="rep-filter-dept" onchange="renderRelatorios()" style="flex:1;min-width:150px">
+          <option value="">Todos os Departamentos</option>
+          <option value="admin">Administração</option>
+          <option value="financas">Finanças</option>
+          <option value="operacoes">Operações</option>
+          <option value="rh">Recursos Humanos</option>
+          <option value="logistica">Logística</option>
+          <option value="campo">Equipa de Campo</option>
+        </select>
+        <select id="rep-filter-user" onchange="renderRelatorios()" style="flex:1;min-width:150px">
+          <option value="">Todos os Funcionários</option>
+        </select>
+        <select id="rep-filter-tipo" onchange="renderRelatorios()" style="flex:1;min-width:150px">
+          <option value="">Todas as Categorias</option>
+          <option value="alojamento">🏨 Alojamento</option>
+          <option value="alimentacao">🍽️ Alimentação</option>
+          <option value="transporte">🚗 Transporte</option>
+          <option value="perdiem">💰 Per Diem</option>
+          <option value="comunicacao">📞 Comunicação</option>
+        </select>
+        <button class="btn btn-outline btn-sm" onclick="clearRepFilters()">✕ Limpar</button>
       </div>
       <!-- Período -->
       <div class="report-period-bar">
         <button class="period-btn" onclick="setRelPeriod('day')">📆 Diário</button>
         <button class="period-btn" onclick="setRelPeriod('week')">🗓️ Semanal</button>
         <button class="period-btn active" onclick="setRelPeriod('month')">📊 Mensal</button>
+        <button class="period-btn" onclick="setRelPeriod('3months')">3 Meses</button>
+        <button class="period-btn" onclick="setRelPeriod('6months')">6 Meses</button>
         <button class="period-btn" onclick="setRelPeriod('year')">📈 Anual</button>
         <button class="period-btn" onclick="setRelPeriod('all')">🗂️ Tudo</button>
       </div>
@@ -969,22 +1292,24 @@
       <div class="card">
         <div class="card-header">
           <h3>Detalhe por Despesa</h3>
-          <span class="card-sub">Clique numa linha para ver o detalhe</span>
+          <span class="card-sub">Clique numa linha para ver o detalhe · <span id="rep-table-count">0</span> registos</span>
         </div>
         <div class="table-wrap">
           <table class="data-table">
             <thead>
               <tr>
                 <th>Data</th>
-                <th>Tipo</th>
+                <th>Funcionário</th>
+                <th>Departamento</th>
                 <th>Descrição</th>
                 <th>Categoria</th>
                 <th>Valor</th>
                 <th>Estado</th>
+                <th>Imprimir</th>
               </tr>
             </thead>
             <tbody id="rep-table-body">
-              <tr><td colspan="6" class="empty-state">Sem dados para este período.</td></tr>
+              <tr><td colspan="8" class="empty-state">Sem dados para este período.</td></tr>
             </tbody>
           </table>
         </div>
@@ -1058,6 +1383,106 @@
       </div>
     </div>
 
+    <!-- ── FORNECEDORES ── -->
+    <div id="page-fornecedores" class="page">
+      <div class="page-header">
+        <div>
+          <h2>🏢 Fornecedores</h2>
+          <p class="page-sub">Cadastro de empresas, hotéis, restaurantes e transportadoras</p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openFornecedorModal()">+ Novo Fornecedor</button>
+      </div>
+      <!-- Filtros -->
+      <div class="filters-bar" style="margin-bottom:16px">
+        <input type="text" id="forn-search-page" placeholder="🔍 Pesquisar fornecedor..." oninput="renderFornecedores()" style="flex:1;max-width:320px"/>
+        <select id="forn-filter-tipo" onchange="renderFornecedores()">
+          <option value="">Todos os tipos</option>
+          <option value="hotel">🏨 Hotel / Alojamento</option>
+          <option value="restaurante">🍽️ Restaurante</option>
+          <option value="transporte">🚗 Transportadora</option>
+          <option value="comunicacao">📞 Comunicações</option>
+          <option value="outro">⚙️ Outro</option>
+        </select>
+        <select id="forn-filter-pag" onchange="renderFornecedores()">
+          <option value="">Todas modalidades</option>
+          <option value="pronto">💵 Pronto Pagamento</option>
+          <option value="credito">🏦 A Prazo / Crédito</option>
+        </select>
+      </div>
+      <!-- Stats rápidas -->
+      <div class="stats-grid" id="forn-stats"></div>
+      <!-- Lista -->
+      <div id="forn-list-container">
+        <p class="empty-state">Nenhum fornecedor cadastrado. Clique em "+ Novo Fornecedor".</p>
+      </div>
+    </div>
+
+    <!-- Modal Fornecedor -->
+    <div id="modal-fornecedor" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('modal-fornecedor')">
+      <div class="modal-box" onclick="event.stopPropagation()">
+        <div class="modal-header">
+          <h3 id="modal-forn-title">Novo Fornecedor</h3>
+          <button class="modal-close" onclick="closeModal('modal-fornecedor')">✕</button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="modal-forn-id"/>
+          <div class="form-section-title">📋 Dados da Empresa</div>
+          <div class="form-row">
+            <div class="form-group flex1">
+              <label>Nome da Empresa *</label>
+              <input id="modal-forn-nome" type="text" placeholder="Ex: Hotel Polana, Transportes XYZ"/>
+            </div>
+            <div class="form-group flex1">
+              <label>NUIT</label>
+              <input id="modal-forn-nuit" type="text" placeholder="000000000" maxlength="9"/>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex1">
+              <label>Endereço</label>
+              <input id="modal-forn-endereco" type="text" placeholder="Av. Julius Nyerere, Maputo"/>
+            </div>
+            <div class="form-group flex1">
+              <label>Contacto</label>
+              <input id="modal-forn-contacto" type="tel" placeholder="+258 21 000 000"/>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex1">
+              <label>Tipo de Fornecedor *</label>
+              <select id="modal-forn-tipo">
+                <option value="hotel">🏨 Hotel / Alojamento</option>
+                <option value="restaurante">🍽️ Restaurante / Alimentação</option>
+                <option value="transporte">🚗 Transportadora</option>
+                <option value="comunicacao">📞 Comunicações</option>
+                <option value="outro">⚙️ Outro</option>
+              </select>
+            </div>
+            <div class="form-group flex1">
+              <label>Modalidade de Pagamento *</label>
+              <select id="modal-forn-pag">
+                <option value="pronto">💵 Pronto Pagamento</option>
+                <option value="credito">🏦 A Prazo (Crédito)</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-section-title">🧾 Dados Fiscais</div>
+          <div class="form-group">
+            <label>Rodapé Legal</label>
+            <textarea id="modal-forn-rodape" rows="2" placeholder="Ex: Pagamento a 30 dias. IVA incluído conforme legislação vigente em Moçambique."></textarea>
+          </div>
+          <div class="form-group">
+            <label>Observações</label>
+            <textarea id="modal-forn-obs" rows="2" placeholder="Notas internas..."></textarea>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-outline" onclick="closeModal('modal-fornecedor')">Cancelar</button>
+          <button class="btn btn-primary" onclick="saveFornecedorModal()">💾 Guardar</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ── NOTIFICAÇÕES ── -->
     <div id="page-notificacoes" class="page">
       <div class="page-header"><h2>🔔 Notificações</h2></div>
@@ -1071,6 +1496,11 @@
       <div class="page-header">
         <h2>👥 Utilizadores</h2>
         <button class="btn btn-primary btn-sm" onclick="openUserModal()">+ Novo Utilizador</button>
+      </div>
+      <!-- Tabs: Lista | Estrutura de Equipas -->
+      <div class="page-tabs" style="margin-bottom:16px">
+        <button class="page-tab active" id="tab-user-lista" onclick="switchUserTab('lista')">📋 Lista</button>
+        <button class="page-tab" id="tab-user-equipas" onclick="switchUserTab('equipas')">🏗️ Estrutura de Equipas</button>
       </div>
       <div id="user-list-container">
         <p class="empty-state">Nenhum utilizador encontrado.</p>
@@ -1185,7 +1615,11 @@
   <div class="modal-box" onclick="event.stopPropagation()">
     <div class="modal-header">
       <h3 id="modal-exp-title">Detalhes da Despesa</h3>
-      <button class="modal-close" onclick="closeModal('modal-expense')">✕</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn btn-sm btn-outline" id="modal-exp-hist-btn" onclick="openExpenseHistory(_currentExpId)" title="Histórico">🕓</button>
+        <button class="btn btn-sm btn-outline" id="modal-exp-pdf-btn" onclick="downloadExpensePDF(_currentExpId)" title="Exportar PDF">📄</button>
+        <button class="modal-close" onclick="closeModal('modal-expense')">✕</button>
+      </div>
     </div>
     <div id="modal-exp-body" class="modal-body"></div>
     <div id="modal-exp-actions" class="modal-actions"></div>
@@ -1212,11 +1646,40 @@
   </div>
 </div>
 
+<!-- Modal: Picker Nova Despesa -->
+<div id="modal-nova-despesa" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('modal-nova-despesa')">
+  <div class="modal-box" style="max-width:420px" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>➕ Nova Despesa</h3>
+      <button class="modal-close" onclick="closeModal('modal-nova-despesa')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text-secondary);margin-bottom:16px;font-size:14px">Escolha o tipo de formulário:</p>
+      <div class="nova-despesa-opts">
+        <button class="nova-despesa-opt" onclick="escolherFormulario('pedido')">
+          <span class="nova-despesa-icon">📋</span>
+          <div>
+            <div class="nova-despesa-title">Pedido de Aprovação</div>
+            <div class="nova-despesa-sub">Solicitar autorização <strong>antes</strong> de ir para o campo</div>
+          </div>
+        </button>
+        <button class="nova-despesa-opt" onclick="escolherFormulario('relatorio')">
+          <span class="nova-despesa-icon">📤</span>
+          <div>
+            <div class="nova-despesa-title">Envio de Despesas</div>
+            <div class="nova-despesa-sub">Registar despesas <strong>após</strong> regressar da missão</div>
+          </div>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Plan Activity Modal -->
 <div id="modal-plan" class="modal-overlay hidden" onclick="closeModal('modal-plan')">
   <div class="modal-box" onclick="event.stopPropagation()">
     <div class="modal-header">
-      <h3>📅 Nova Atividade Planeada</h3>
+      <h3>📅 Planeamento de Saída</h3>
       <button class="modal-close" onclick="closeModal('modal-plan')">✕</button>
     </div>
     <div class="modal-body">
@@ -1253,7 +1716,47 @@
         <div class="total-value" id="plan-total-display">0.00 MZN</div>
       </div>
       <div class="form-group"><label>Projeto</label><input id="plan-projeto" type="text" placeholder="Código do projeto"/></div>
-      <div class="form-group"><label>Notas</label><textarea id="plan-notas" rows="2" placeholder="Informação adicional…"></textarea></div>
+
+      <!-- Fornecedor no Planeamento -->
+      <div class="form-section-title" style="margin-top:12px">🏢 Dados do Fornecedor</div>
+      <div class="form-group" style="position:relative">
+        <input id="plan-forn-search" type="text" placeholder="🔍 Pesquisar fornecedor..." oninput="searchFornecedorPlan(this.value)" autocomplete="off"/>
+        <div id="plan-forn-dropdown" class="forn-dropdown hidden"></div>
+      </div>
+      <div id="plan-forn-selected" class="forn-card hidden">
+        <div class="forn-card-row">
+          <div>
+            <div class="forn-card-nome" id="plan-forn-nome-disp"></div>
+            <div class="forn-card-meta"><span id="plan-forn-meta-disp"></span></div>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline" onclick="clearFornecedorPlan()">✕</button>
+        </div>
+      </div>
+      <div id="plan-forn-novo-wrap" class="hidden">
+        <div class="form-row">
+          <div class="form-group flex1"><label>Nome *</label><input id="plan-forn-nome" type="text" placeholder="Nome da empresa..."/></div>
+          <div class="form-group flex1"><label>NUIT</label><input id="plan-forn-nuit" type="text" placeholder="000000000" maxlength="9"/></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group flex1"><label>Contacto</label><input id="plan-forn-contacto" type="tel" placeholder="+258..."/></div>
+          <div class="form-group flex1">
+            <label>Tipo</label>
+            <select id="plan-forn-tipo">
+              <option value="hotel">🏨 Hotel/Alojamento</option>
+              <option value="restaurante">🍽️ Restaurante</option>
+              <option value="transporte">🚗 Transportadora</option>
+              <option value="comunicacao">📞 Comunicações</option>
+              <option value="outro">⚙️ Outros</option>
+            </select>
+          </div>
+        </div>
+        <label class="checkbox-item" style="margin-bottom:8px">
+          <input type="checkbox" id="plan-forn-guardar" checked/> 💾 Guardar para uso futuro
+        </label>
+      </div>
+      <button type="button" class="btn btn-outline btn-sm" id="btn-toggle-plan-forn" onclick="toggleFornecedorPlan()">+ Adicionar Novo Fornecedor</button>
+
+      <div class="form-group" style="margin-top:12px"><label>Notas</label><textarea id="plan-notas" rows="2" placeholder="Informação adicional…"></textarea></div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('modal-plan')">Cancelar</button>
@@ -1270,23 +1773,46 @@
       <button class="modal-close" onclick="closeModal('modal-user')">✕</button>
     </div>
     <div class="modal-body">
-      <div class="form-group"><label>Nome completo *</label><input id="new-user-name" type="text"/></div>
-      <div class="form-group"><label>Email *</label><input id="new-user-email" type="email"/></div>
-      <div class="form-group"><label>Palavra-passe *</label><input id="new-user-pass" type="password" placeholder="Mínimo 6 caracteres"/></div>
+      <div class="form-group"><label>Nome completo *</label><input id="new-user-name" type="text" placeholder="Ex: Maria Silva"/></div>
+      <div class="form-group"><label>Email *</label><input id="new-user-email" type="email" placeholder="maria@empresa.com"/></div>
+      <div class="form-group">
+        <label>Palavra-passe *</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="input-icon-wrap" style="flex:1">
+            <input id="new-user-pass" type="text" placeholder="Mínimo 6 caracteres"/>
+          </div>
+          <button type="button" class="btn btn-outline btn-sm" onclick="gerarPasswordUtilizador()" title="Gerar palavra-passe aleatória">🎲 Gerar</button>
+        </div>
+        <div id="new-user-pass-copy" class="hidden" style="margin-top:6px;font-size:12px;color:var(--text-secondary)">
+          Copie a palavra-passe antes de guardar — não será mostrada novamente.
+        </div>
+      </div>
       <div class="form-group">
         <label>Função *</label>
-        <select id="new-user-role">
-          <option value="funcionario">Funcionário</option>
-          <option value="gestor">Gestor / Supervisor</option>
-          <option value="director">Director</option>
-          <option value="financeiro">Financeiro</option>
-          <option value="admin">Administrador</option>
+        <select id="new-user-role" onchange="onUserRoleChange()">
+          <option value="funcionario">👤 Funcionário</option>
+          <option value="supervisor">👥 Supervisor</option>
+          <option value="coordenador">📋 Coordenador</option>
+          <option value="gestor">🏢 Gestor</option>
+          <option value="director">🎯 Director</option>
+          <option value="financeiro">💰 Financeiro</option>
+          <option value="admin">⚙️ Administrador</option>
         </select>
+      </div>
+      <!-- Alocação de Supervisor — aparece quando o role não é admin/director/gestor/financeiro -->
+      <div id="user-supervisor-group" class="form-group">
+        <label>Reporta a (Supervisor)</label>
+        <select id="new-user-supervisor">
+          <option value="">— Sem supervisor atribuído —</option>
+        </select>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">
+          Define a quem este utilizador reporta na cadeia de aprovação.
+        </div>
       </div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('modal-user')">Cancelar</button>
-      <button class="btn btn-primary" onclick="createUser()">Criar Utilizador</button>
+      <button class="btn btn-primary" onclick="createUser()">✓ Criar Utilizador</button>
     </div>
   </div>
 </div>
@@ -1339,6 +1865,52 @@
     <div id="fraud-modal-body" class="modal-body"></div>
     <div class="modal-actions">
       <button class="btn btn-outline btn-full" onclick="closeModal('modal-fraud')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: EMAIL PREVIEW ── -->
+<div id="modal-email-preview" class="modal-overlay hidden" onclick="closeModal('modal-email-preview')">
+  <div class="modal-box" style="max-width:560px" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>📧 Enviar Relatório por Email</h3>
+      <button class="modal-close" onclick="closeModal('modal-email-preview')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Para (destinatários)</label>
+        <input id="email-prev-to" type="text" placeholder="email1@empresa.com, email2@empresa.com" style="width:100%"/>
+      </div>
+      <div class="form-group">
+        <label>Assunto</label>
+        <input id="email-prev-subject" type="text" style="width:100%"/>
+      </div>
+      <div class="form-group">
+        <label>Corpo do email</label>
+        <textarea id="email-prev-body" rows="10" style="width:100%;font-family:monospace;font-size:12px;resize:vertical"></textarea>
+      </div>
+      <div style="background:var(--bg-page);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:12px;color:var(--text-secondary)">
+        💡 Ao clicar "Abrir no Email" irá abrir o seu cliente de email (Outlook, Gmail, etc.) com o relatório pré-preenchido.
+        Use "Copiar" para copiar o conteúdo manualmente.
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="copyEmailContent()">📋 Copiar</button>
+      <button class="btn btn-primary" onclick="openEmailClient()">📤 Abrir no Email</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL: HISTÓRICO DA DESPESA ── -->
+<div id="modal-history" class="modal-overlay hidden" onclick="closeModal('modal-history')">
+  <div class="modal-box" style="max-width:520px" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>🕓 Histórico de Alterações</h3>
+      <button class="modal-close" onclick="closeModal('modal-history')">✕</button>
+    </div>
+    <div id="modal-history-body" class="modal-body"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline btn-full" onclick="closeModal('modal-history')">Fechar</button>
     </div>
   </div>
 </div>

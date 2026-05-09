@@ -54,6 +54,7 @@ function showView(id) {
   document.getElementById(id)?.classList.add('active');
 }
 function showPage(id) {
+  closeAllModals();   // fechar todos os modais antes de navegar
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item, .bnav-btn').forEach(n => n.classList.remove('active'));
   document.getElementById(id)?.classList.add('active');
@@ -63,7 +64,7 @@ function showPage(id) {
 
   switch (id) {
     case 'page-dashboard':     renderDashboard();          break;
-    case 'page-despesas':      renderExpenseList();        break;
+    case 'page-despesas':      despesasTab = 'mine'; document.getElementById('tab-desp-mine')?.classList.add('active'); document.getElementById('tab-desp-empresa')?.classList.remove('active'); renderExpenseList(); break;
     case 'page-aprovacoes':    renderAprovacoes();         break;
     case 'page-relatorios':    renderRelatorios();         break;
     case 'page-planeamento':   renderPlaneamento();        break;
@@ -74,7 +75,69 @@ function showPage(id) {
     case 'page-config':        renderConfig();             break;
     case 'page-tendencias':    renderTendencias();         break;
     case 'page-divididas':     renderDespesasDivididas();  break;
+    case 'page-fornecedores':  renderFornecedores();       break;
   }
+}
+
+// ── SIDEBAR NAV GROUPS (colapsáveis) ──
+function toggleNavGroup(id) {
+  const group = document.getElementById(id);
+  const caretId = 'caret-' + id.replace('nav-', '');
+  const caret = document.getElementById(caretId);
+  if (!group) return;
+  const isOpen = !group.classList.contains('nav-group-closed');
+  group.classList.toggle('nav-group-closed', isOpen);
+  if (caret) caret.textContent = isOpen ? '▶' : '▼';
+}
+
+// ── NOVA DESPESA PICKER ──
+function openNovaDespesaModal() {
+  openModal('modal-nova-despesa');
+}
+function escolherFormulario(tipo) {
+  closeModal('modal-nova-despesa');
+  showCampoForm(tipo);
+}
+
+// ── CAMPO FORM SELECTOR ──
+// Mostra APENAS o formulário escolhido, esconde o selector de tabs
+function showCampoForm(tipo) {
+  // Navegar para page-campo sem fechar modais (showPage já fecha)
+  closeAllModals();
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item, .bnav-btn').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-campo')?.classList.add('active');
+  if (window.innerWidth < 768) closeSidebar();
+  document.getElementById('user-menu')?.classList.add('hidden');
+
+  // Ocultar selector de tabs — mostrar só o form escolhido
+  const opts = document.querySelector('.campo-opts');
+  if (opts) opts.style.display = 'none';
+
+  const pedido = document.getElementById('form-campo-pedido');
+  const relat  = document.getElementById('form-campo-relatorio');
+  const header = document.querySelector('#page-campo .page-sub');
+
+  if (tipo === 'pedido') {
+    if (pedido) pedido.classList.remove('hidden');
+    if (relat)  relat.classList.add('hidden');
+    if (header) header.textContent = 'Pedido de Aprovação — preencha e envie para autorização';
+  } else {
+    if (pedido) pedido.classList.add('hidden');
+    if (relat)  relat.classList.remove('hidden');
+    if (header) header.textContent = 'Envio de Despesas — registe despesas após a missão';
+  }
+}
+
+// Quando se vai directamente para page-campo (via Início), restaura o selector
+function showCampoPage() {
+  showPage('page-campo');
+  const opts = document.querySelector('.campo-opts');
+  if (opts) opts.style.display = '';
+  document.getElementById('form-campo-pedido')?.classList.remove('hidden');
+  document.getElementById('form-campo-relatorio')?.classList.add('hidden');
+  const header = document.querySelector('#page-campo .page-sub');
+  if (header) header.textContent = 'Escolha o tipo de formulário';
 }
 
 // ── SIDEBAR ──
@@ -87,6 +150,22 @@ function toggleSidebar() {
 function closeSidebar() {
   document.getElementById('sidebar')?.classList.remove('open');
   document.getElementById('sidebar-overlay')?.classList.add('hidden');
+}
+let _sidebarCollapsed = false;
+function collapseSidebar() {
+  const sb   = document.getElementById('sidebar');
+  const main = document.querySelector('.main-content');
+  const btn  = document.getElementById('sidebar-collapse-btn');
+  _sidebarCollapsed = !_sidebarCollapsed;
+  if (_sidebarCollapsed) {
+    sb?.classList.add('sidebar-collapsed');
+    if (main) main.style.marginLeft = '0';
+    if (btn) btn.textContent = '▶';
+  } else {
+    sb?.classList.remove('sidebar-collapsed');
+    if (main) main.style.marginLeft = '';
+    if (btn) btn.textContent = '◀';
+  }
 }
 
 // ── TOAST ──
@@ -101,8 +180,20 @@ function showToast(msg, type = '') {
 }
 
 // ── MODAL ──
-function closeModal(id) { document.getElementById(id)?.classList.add('hidden'); }
-function openModal(id)  { document.getElementById(id)?.classList.remove('hidden'); }
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.add('hidden');
+}
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove('hidden');
+}
+function closeAllModals() {
+  // Fecha TODOS os modais de qualquer sistema (modal-overlay, modal)
+  document.querySelectorAll('.modal-overlay, .modal').forEach(m => {
+    m.classList.add('hidden');
+  });
+}
 
 // ── AUTH ──
 function togglePw(inputId, btn) {
@@ -324,9 +415,10 @@ function getMyExpenses() {
 function filterByPeriod(expenses, period) {
   const now   = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  // Start of this week (Monday)
-  const dow   = (now.getDay() + 6) % 7; // 0=Mon
+  const dow   = (now.getDay() + 6) % 7;
   const weekStart = new Date(today); weekStart.setDate(today.getDate() - dow);
+  const months3 = new Date(today); months3.setMonth(today.getMonth() - 3);
+  const months6 = new Date(today); months6.setMonth(today.getMonth() - 6);
   return expenses.filter(e => {
     const dateStr = e.data || (e.submittedAt ? e.submittedAt.slice(0,10) : null);
     if (!dateStr) return period === 'all';
@@ -334,13 +426,19 @@ function filterByPeriod(expenses, period) {
     if (period === 'day')     return d >= today;
     if (period === 'week')    return d >= weekStart;
     if (period === 'month')   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    if (period === '3months') return d >= months3;
+    if (period === '6months') return d >= months6;
     if (period === 'quarter') { const q = Math.floor(now.getMonth()/3); return d.getFullYear() === now.getFullYear() && Math.floor(d.getMonth()/3) === q; }
     if (period === 'year')    return d.getFullYear() === now.getFullYear();
-    return true; // 'all'
+    return true;
   });
 }
 function periodLabel(period) {
-  return { day: 'Hoje', week: 'Esta Semana', month: 'Este Mês', year: 'Este Ano', quarter: 'Trimestre', all: 'Todo o Período' }[period] || period;
+  return {
+    day: 'Hoje', week: 'Esta Semana', month: 'Este Mês',
+    '3months': 'Últimos 3 Meses', '6months': 'Últimos 6 Meses',
+    year: 'Este Ano', quarter: 'Trimestre', all: 'Todo o Período'
+  }[period] || period;
 }
 
 // ── BADGES & NOTIFICATIONS ──
@@ -365,6 +463,49 @@ function pushNotification(userId, title, body, type = 'info') {
   if ('Notification' in window && Notification.permission === 'granted') {
     try { new Notification(`SGODC – ${title}`, { body, icon: 'icons/icon-192.png' }); } catch {}
   }
+}
+
+// ── DASHBOARD VIEW (pessoal / empresa) ──
+let dashView = 'mine'; // 'mine' | 'empresa'
+
+function switchDashView(view) {
+  dashView = view;
+  // Actualizar botões
+  document.getElementById('dash-tab-mine')?.classList.toggle('active', view === 'mine');
+  document.getElementById('dash-tab-empresa')?.classList.toggle('active', view === 'empresa');
+  // Mostrar/esconder secções
+  const sectionMine    = document.getElementById('dash-section-mine');
+  const sectionEmpresa = document.getElementById('dash-section-empresa');
+  if (sectionMine)    sectionMine.classList.toggle('hidden', view !== 'mine');
+  if (sectionEmpresa) sectionEmpresa.classList.toggle('hidden', view !== 'empresa');
+}
+
+// Navegação a partir dos cards do dashboard
+function goToDespesasMine() {
+  despesasTab = 'mine';
+  showPage('page-despesas');
+}
+function goToDespesasMineFiltered(status) {
+  despesasTab = 'mine';
+  showPage('page-despesas');
+  setTimeout(() => {
+    const el = document.getElementById('filter-status');
+    if (el) { el.value = status; renderExpenseList(); }
+  }, 100);
+}
+function goToDespesasEmpresa() {
+  despesasTab = 'empresa';
+  showPage('page-despesas');
+  setTimeout(() => { switchDespesasTab('empresa'); }, 50);
+}
+function goToDespesasEmpresaFiltered(status) {
+  despesasTab = 'empresa';
+  showPage('page-despesas');
+  setTimeout(() => {
+    switchDespesasTab('empresa');
+    const el = document.getElementById('filter-status');
+    if (el) { el.value = status; renderExpenseList(); }
+  }, 100);
 }
 
 // ── DASHBOARD PERIOD ──
@@ -427,6 +568,14 @@ function renderDashboard() {
     setEl('stat-emp-approved', empApproved);
     setEl('stat-emp-pending',  empPending);
     setEl('stat-emp-users',    empUsers);
+    // Mostrar tabs e aplicar vista activa
+    document.getElementById('dash-view-tabs')?.classList.remove('hidden');
+    switchDashView(dashView);
+  } else {
+    // Funcionários: só secção pessoal, sem tabs
+    document.getElementById('dash-section-mine')?.classList.remove('hidden');
+    document.getElementById('dash-section-empresa')?.classList.add('hidden');
+    document.getElementById('dash-view-tabs')?.classList.add('hidden');
   }
 
   // ── ÚLTIMAS 5 despesas ──
@@ -575,31 +724,80 @@ function expenseItemHTML(exp, showUser = false) {
   </div>`;
 }
 
+// ── TABS DE DESPESAS (admin/gestor) ──
+let despesasTab = 'mine'; // 'mine' | 'empresa'
+
+function switchDespesasTab(tab) {
+  despesasTab = tab;
+  ['mine','empresa'].forEach(t => {
+    document.getElementById(`tab-desp-${t}`)?.classList.toggle('active', t === tab);
+  });
+  // resetar filtro de utilizador ao mudar de tab
+  const userSel = document.getElementById('filter-user');
+  if (userSel) userSel.value = '';
+  renderExpenseList();
+}
+
 // ── EXPENSE LIST ──
 function renderExpenseList() {
   const statusFilter = document.getElementById('filter-status')?.value || '';
   const typeFilter   = document.getElementById('filter-type')?.value   || '';
+  const userFilter   = document.getElementById('filter-user')?.value   || '';
   const search       = (document.getElementById('filter-search')?.value || '').toLowerCase();
+  const isFunc       = currentUser.role === 'funcionario';
 
-  // "As minhas despesas" — sempre filtrado pelo utilizador actual, independente do role
-  let list = DB.getExpensesByUser(currentUser.id);
+  // Para gestores/admin, respeitar a tab activa
+  const showingMine = isFunc || despesasTab === 'mine';
+  const showingEmpresa = !isFunc && despesasTab === 'empresa';
+
+  // Título dinâmico
+  const titleEl = document.getElementById('despesas-page-title');
+  if (titleEl) {
+    if (showingMine) titleEl.textContent = '📁 As minhas despesas';
+    else             titleEl.textContent = '📁 Todas as Despesas da Empresa';
+  }
+
+  // Dropdown de utilizadores (só na tab empresa)
+  const userSel = document.getElementById('filter-user');
+  const userSelWrap = userSel?.parentElement || userSel;
+  if (userSel) {
+    if (showingEmpresa) {
+      userSel.classList.remove('hidden');
+      const currentVal = userSel.value;
+      const users = DB.getUsersByCompany(currentCompany.id).sort((a,b) => a.name.localeCompare(b.name));
+      userSel.innerHTML = '<option value="">Todos os Funcionários</option>' +
+        users.map(u => `<option value="${u.id}" ${u.id===currentVal?'selected':''}>${u.name}</option>`).join('');
+    } else {
+      userSel.classList.add('hidden');
+      userSel.value = '';
+    }
+  }
+
+  // Escolher conjunto de despesas
+  let list = showingMine
+    ? DB.getExpensesByUser(currentUser.id)
+    : DB.getExpensesByCompany(currentCompany.id);
+
   if (statusFilter) list = list.filter(e => e.status === statusFilter);
   if (typeFilter)   list = list.filter(e => e.type === typeFilter || e.type === typeFilter + '-pedido');
+  if (showingEmpresa && userFilter) list = list.filter(e => e.userId === userFilter);
   if (search)       list = list.filter(e =>
     expenseName(e).toLowerCase().includes(search) ||
     (e.local||'').toLowerCase().includes(search) ||
-    (e.projeto||'').toLowerCase().includes(search)
+    (e.projeto||'').toLowerCase().includes(search) ||
+    (DB.getUser(e.userId)?.name || '').toLowerCase().includes(search)
   );
   list.sort((a,b) => (b.submittedAt||b.data||'').localeCompare(a.submittedAt||a.data||''));
 
   const container = document.getElementById('expense-list-container');
   container.innerHTML = list.length === 0
     ? '<p class="empty-state">Nenhuma despesa encontrada.</p>'
-    : `<div class="expense-list">${list.map(e => expenseItemHTML(e)).join('')}</div>`;
+    : `<div class="expense-list">${list.map(e => expenseItemHTML(e, showingEmpresa)).join('')}</div>`;
 }
 
 // ── EXPENSE DETAIL MODAL ──
 function openExpenseDetail(id) {
+  _currentExpId = id; // track for PDF/history buttons
   const exp = DB.getExpense(id);
   if (!exp) return;
   // Privacidade: funcionário só pode ver as suas próprias despesas
@@ -629,7 +827,8 @@ function openExpenseDetail(id) {
     <div class="detail-item"><div class="detail-label">Valor/Pessoa</div><div class="detail-value">${fmtCurrency(exp.valorPessoa||0, currency)}</div></div>
     <div class="detail-item"><div class="detail-label">Tipo Despesa</div><div class="detail-value">${typeLabel(exp.expenseType)}</div></div>
     <div class="detail-item"><div class="detail-label">Tipo Trabalho</div><div class="detail-value">${exp.trabalho||'—'}</div></div>`;
-    if (exp.km) html += `<div class="detail-item"><div class="detail-label">Distância GPS</div><div class="detail-value">${parseFloat(exp.km).toFixed(2)} km</div></div>`;
+    if (exp.km)  html += `<div class="detail-item"><div class="detail-label">GPS</div><div class="detail-value">📍 ${exp.km}</div></div>`;
+    if (exp.gps && !exp.km) html += `<div class="detail-item"><div class="detail-label">GPS</div><div class="detail-value">📍 ${exp.gps}</div></div>`;
   }
   html += `<div class="detail-item"><div class="detail-label">Submetido por</div><div class="detail-value">${user?.name||'—'}</div></div>
     <div class="detail-item"><div class="detail-label">Submetido em</div><div class="detail-value">${exp.submittedAt ? fmtDate(exp.submittedAt) : '(rascunho)'}</div></div>`;
@@ -747,6 +946,7 @@ function confirmDecision() {
     exp.decidedBy = currentUser.id;
     exp.decisionComment = comment;
     exp.decisionAt = today;
+    _addHistory(exp, exp.status, comment);
     DB.saveExpense(exp);
     notifyExpenseOwner(exp, exp.status);
     _finishDecision(exp.status);
@@ -763,6 +963,7 @@ function confirmDecision() {
       pendingLevel.date    = today;
     }
     exp.status = 'rejected';
+    _addHistory(exp, 'rejected', comment);
     DB.saveExpense(exp);
     notifyExpenseOwner(exp, 'rejected');
     _finishDecision('rejected');
@@ -782,10 +983,12 @@ function confirmDecision() {
   if (nextLevel) {
     nextLevel.status = 'pending';
     exp.status = 'pending';
+    _addHistory(exp, 'approved', `Nível ${pendingLevel.level} (${pendingLevel.label}): ${comment}`);
     notifyNextApprover(exp, nextLevel.level);
   } else {
     // All levels done
     exp.status = 'approved';
+    _addHistory(exp, 'approved', comment);
     notifyExpenseOwner(exp, 'approved');
   }
   DB.saveExpense(exp);
@@ -834,6 +1037,7 @@ function sendDraftExpense(id) {
   }));
   exp.status = 'pending';
   exp.submittedAt = new Date().toISOString().slice(0, 10);
+  _addHistory(exp, 'sent_draft', 'Rascunho enviado para aprovação');
   DB.saveExpense(exp);
 
   // Notify level-1 approvers
@@ -1035,12 +1239,16 @@ function submitPedidoCampo(status) {
   const approvals  = _buildApprovalChain(status);
   const pessoas    = parseInt(document.getElementById('pedido-pessoas')?.value) || 1;
 
+  // Fornecedor do pedido
+  const fornPedido = _saveFornecedorPedidoInline?.() || null;
+
   const exp = {
     id: DB.uid(), companyId: currentCompany.id, userId: currentUser.id,
     type: 'campo-pedido', status,
     name: titulo || `Pedido de Missão – ${local || ''}`,
     expenseType: tipoDespesa || atividade,
     tipoDespesa,
+    fornecedor: fornPedido ? { id: fornPedido.id, nome: fornPedido.nome, nuit: fornPedido.nuit, tipo: fornPedido.tipo, modalidade: fornPedido.modalidade } : null,
     facturaType: facturaT,
     facturaLinhas: facturaT === 'conjunta' ? facturaInfo.linhas : [],
     valor: total, moeda,
@@ -1162,14 +1370,24 @@ function submitCampo(status) {
     showToast('Preencha os campos obrigatórios (*)', 'error'); return;
   }
 
-  const total     = pessoas * (isNaN(valPessoa) ? 0 : valPessoa);
+  const subtotal  = pessoas * (isNaN(valPessoa) ? 0 : valPessoa);
+  const ivaInfo   = _getIVAInfo?.() || { comIVA: false, taxa: 16, regime: 'normal' };
+  const ivaValor  = ivaInfo.comIVA ? subtotal * (ivaInfo.taxa / 100) : 0;
+  const total     = subtotal + ivaValor;
   const payMethod = document.getElementById('campo-pay-method')?.value || 'cash';
   const phoneNum  = document.getElementById('campo-phone')?.value.trim() || '';
   const recInput  = document.getElementById('campo-recibo');
   const receiptData = recInput?._base64 || null;
-  const kmEl      = document.getElementById('campo-km');
-  const km        = kmEl && kmEl.value ? parseFloat(kmEl.value) : null;
+  const gpsEl     = document.getElementById('campo-gps');
+  const gpsCoords = gpsEl?.value.trim() || null;
   const approvals = _buildApprovalChain(status);
+
+  // Fornecedor
+  const forn = _saveFornecedorInline?.() || null;
+
+  // Documento fiscal
+  const docTipo = document.getElementById('campo-doc-tipo')?.value || 'fatura';
+  const docNum  = document.getElementById('campo-doc-num')?.value.trim() || _gerarNumDoc(docTipo);
 
   const exp = {
     id: DB.uid(), companyId: currentCompany.id, userId: currentUser.id,
@@ -1185,11 +1403,22 @@ function submitCampo(status) {
     comentario: document.getElementById('campo-comentario').value.trim(),
     paymentMethod: payMethod,
     phoneNumber: ['mpesa','emola','mpesk'].includes(payMethod) ? phoneNum : '',
-    km,
+    gpsCoords,
     receiptData,
     approvals,
     submittedAt: status === 'pending' ? inicio : null,
+    // Fornecedor
+    fornecedor: forn ? { id: forn.id, nome: forn.nome, nuit: forn.nuit, tipo: forn.tipo, modalidade: forn.modalidade } : null,
+    // Faturação / IVA
+    docTipo, docNum,
+    ivaAplicado: ivaInfo.comIVA,
+    ivaTaxa:     ivaInfo.taxa,
+    ivaRegime:   ivaInfo.regime,
+    subtotal,
+    ivaValor,
   };
+  _addHistory(exp, status === 'pending' ? 'submitted' : 'draft_saved',
+    status === 'pending' ? 'Despesa enviada para aprovação' : 'Rascunho guardado');
   DB.saveExpense(exp);
 
   if (status === 'pending' && (currentCompany?.approvalChain||[]).length > 0) {
@@ -1231,11 +1460,15 @@ function clearCampoForm() {
 
 // ── CAMPO CALC ──
 function calcCampoTotal() {
-  const n   = parseInt(document.getElementById('campo-pessoas').value) || 1;
-  const v   = parseFloat(document.getElementById('campo-valor-pessoa').value) || 0;
-  const cur = document.getElementById('campo-moeda').value;
-  document.getElementById('campo-total-display').textContent = fmtCurrency(n*v, cur);
+  const n        = parseInt(document.getElementById('campo-pessoas').value) || 1;
+  const v        = parseFloat(document.getElementById('campo-valor-pessoa').value) || 0;
+  const cur      = document.getElementById('campo-moeda')?.value || 'MZN';
+  const subtotal = n * v;
+  document.getElementById('campo-total-display').textContent = fmtCurrency(subtotal, cur);
   document.getElementById('campo-formula').textContent = `${n} pessoa${n>1?'s':''} × ${fmtCurrency(v, cur)}`;
+  // Actualizar banner IVA
+  const { comIVA } = _getIVAInfo?.() || { comIVA: false };
+  if (comIVA) _updateIVABanner?.(subtotal, cur);
 }
 function updateCampoMoeda() {
   const cur = document.getElementById('campo-moeda').value;
@@ -1334,30 +1567,112 @@ function renderAprovacoes() {
 // ── PLANEAMENTO ──
 function renderPlaneamento() {
   if (!currentCompany) return;
-  const plans = DB.getPlansByCompany(currentCompany.id)
-    .sort((a,b) => (a.inicio||'').localeCompare(b.inicio||''));
-  const container = document.getElementById('plan-list');
-  if (plans.length === 0) {
-    container.innerHTML = '<p class="empty-state">Nenhuma atividade planeada.</p>'; return;
+  const isFunc = currentUser.role === 'funcionario';
+  // Funcionário vê só os seus planos; gestores vêem todos
+  const allPlans = DB.getPlansByCompany(currentCompany.id);
+  let plans = isFunc
+    ? allPlans.filter(p => p.createdBy === currentUser.id)
+    : allPlans;
+
+  // Aplicar filtros (managers)
+  if (!isFunc) {
+    const fStatus = document.getElementById('plan-filter-status')?.value || '';
+    const fTipo   = document.getElementById('plan-filter-tipo')?.value   || '';
+    const fSearch = (document.getElementById('plan-filter-search')?.value || '').toLowerCase();
+    if (fStatus) plans = plans.filter(p => p.status === fStatus);
+    if (fTipo)   plans = plans.filter(p => p.tipo   === fTipo);
+    if (fSearch) plans = plans.filter(p =>
+      (p.desc||'').toLowerCase().includes(fSearch) ||
+      (p.local||'').toLowerCase().includes(fSearch) ||
+      (p.projeto||'').toLowerCase().includes(fSearch) ||
+      (DB.getUser(p.createdBy)?.name||'').toLowerCase().includes(fSearch)
+    );
   }
+  plans = plans.sort((a,b) => (a.inicio||'').localeCompare(b.inicio||''));
+
   const planIcons = { campo:'🌍', viagem:'✈️', alojamento:'🏨', formacao:'📚', reuniao:'🤝' };
-  container.innerHTML = plans.map(p => {
-    const icon = planIcons[p.tipo] || '📅';
-    const statusCls = { upcoming:'upcoming', active:'active', done:'done' }[p.status] || 'upcoming';
-    const statusTxt = { upcoming:'Agendado', active:'Em curso', done:'Concluído' }[p.status] || 'Agendado';
-    return `<div class="plan-item">
-      <div class="plan-item-header">
-        <div class="plan-item-title">${icon} ${p.desc}</div>
-        <span class="plan-status ${statusCls}">${statusTxt}</span>
-      </div>
-      <div class="plan-item-meta">
-        📅 ${fmtDate(p.inicio)} → ${fmtDate(p.fim)} &nbsp;·&nbsp; 📍 ${p.local||'—'}
-        &nbsp;·&nbsp; 👥 ${p.pessoas} pessoa${p.pessoas>1?'s':''}
-        &nbsp;·&nbsp; 💰 ${fmtCurrency(p.total||0, p.moeda||'MZN')} estimado
-        ${p.projeto ? ' &nbsp;·&nbsp; 📌 ' + p.projeto : ''}
-      </div>
-    </div>`;
-  }).join('');
+  const statusCls = { upcoming:'upcoming', active:'active', done:'done' };
+  const statusTxt = { upcoming:'Agendado', active:'Em curso', done:'Concluído' };
+
+  // ── Tabela desktop ──
+  const tbody = document.getElementById('plan-table-body');
+  if (tbody) {
+    if (plans.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="12" class="empty-state">Nenhuma atividade planeada.</td></tr>`;
+    } else {
+      tbody.innerHTML = plans.map(p => {
+        const icon    = planIcons[p.tipo] || '📅';
+        const sCls    = statusCls[p.status] || 'upcoming';
+        const sTxt    = statusTxt[p.status] || 'Agendado';
+        const creator = DB.getUser(p.createdBy);
+        const creatorName = creator ? creator.name : '—';
+        const forn    = p.fornecedor ? p.fornecedor.nome : '—';
+        const dept    = p.dept || '—';
+        const deptLabel = { admin:'Administração', financas:'Finanças', operacoes:'Operações', rh:'Recursos Humanos', logistica:'Logística', campo:'Campo' }[dept] || dept;
+        return `<tr>
+          <td>${fmtDate(p.inicio)}</td>
+          <td>${fmtDate(p.fim)}</td>
+          <td>${icon} ${p.tipo||'—'}</td>
+          <td><strong>${p.desc||'—'}</strong>${p.projeto ? `<br/><small>📌 ${p.projeto}</small>` : ''}</td>
+          <td>📍 ${p.local||'—'}</td>
+          <td>${isFunc ? '—' : deptLabel}</td>
+          <td>${isFunc ? '—' : creatorName}</td>
+          <td>👥 ${p.pessoas||1}</td>
+          <td><strong>${fmtCurrency(p.total||0, p.moeda||'MZN')}</strong></td>
+          <td>${forn}</td>
+          <td><span class="plan-status ${sCls}">${sTxt}</span></td>
+          <td>
+            <button class="btn btn-sm btn-outline" onclick="changePlanStatus('${p.id}','done')" title="Marcar concluído">✅</button>
+            <button class="btn btn-sm btn-danger-outline" onclick="deletePlan('${p.id}')" title="Eliminar">🗑️</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+  }
+
+  // ── Cards mobile (fallback) ──
+  const container = document.getElementById('plan-list');
+  if (container) {
+    if (plans.length === 0) {
+      container.innerHTML = '<p class="empty-state">Nenhuma atividade planeada.</p>';
+    } else {
+      container.innerHTML = plans.map(p => {
+        const icon  = planIcons[p.tipo] || '📅';
+        const sCls  = statusCls[p.status] || 'upcoming';
+        const sTxt  = statusTxt[p.status] || 'Agendado';
+        return `<div class="plan-item">
+          <div class="plan-item-header">
+            <div class="plan-item-title">${icon} ${p.desc}</div>
+            <span class="plan-status ${sCls}">${sTxt}</span>
+          </div>
+          <div class="plan-item-meta">
+            📅 ${fmtDate(p.inicio)} → ${fmtDate(p.fim)} &nbsp;·&nbsp; 📍 ${p.local||'—'}
+            &nbsp;·&nbsp; 👥 ${p.pessoas} pessoa${p.pessoas>1?'s':''}
+            &nbsp;·&nbsp; 💰 ${fmtCurrency(p.total||0, p.moeda||'MZN')} estimado
+            ${p.projeto ? ' &nbsp;·&nbsp; 📌 ' + p.projeto : ''}
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
+function changePlanStatus(id, newStatus) {
+  const plans = DB.getPlans();
+  const p = plans.find(x => x.id === id);
+  if (!p) return;
+  p.status = newStatus;
+  DB.savePlan(p);
+  renderPlaneamento();
+  showToast(newStatus === 'done' ? 'Atividade marcada como concluída ✅' : 'Estado atualizado', 'success');
+}
+
+function deletePlan(id) {
+  if (!confirm('Eliminar esta atividade planeada?')) return;
+  const plans = DB.getPlans().filter(p => p.id !== id);
+  DB._set(DB.KEYS.PLANS, plans);
+  renderPlaneamento();
+  showToast('Atividade eliminada', 'info');
 }
 function openPlanModal() {
   ['plan-desc','plan-local','plan-projeto','plan-notas'].forEach(id => {
@@ -1385,6 +1700,7 @@ function savePlan() {
   const n = parseInt(document.getElementById('plan-pessoas').value) || 1;
   const c = parseFloat(document.getElementById('plan-custo').value) || 0;
   const cur = document.getElementById('plan-moeda').value;
+  const forn = _saveFornecedorPlanInline?.() || null;
   DB.savePlan({
     id: DB.uid(), companyId: currentCompany.id, createdBy: currentUser.id,
     tipo: document.getElementById('plan-tipo').value,
@@ -1393,6 +1709,7 @@ function savePlan() {
     pessoas: n, custo: c, total: n*c, moeda: cur,
     projeto: document.getElementById('plan-projeto').value.trim(),
     notas: document.getElementById('plan-notas').value.trim(),
+    fornecedor: forn ? { id: forn.id, nome: forn.nome, nuit: forn.nuit, tipo: forn.tipo } : null,
     status: 'upcoming',
     createdAt: new Date().toISOString().slice(0,10),
   });
@@ -1411,9 +1728,9 @@ function setRelPeriod(period) {
   // Actualizar botões depois de navegar
   setTimeout(() => {
     document.querySelectorAll('#page-relatorios .period-btn').forEach(b => b.classList.remove('active'));
-    const periodos = { day:0, week:1, month:2, year:3, all:4 };
+    const periodos = { day:0, week:1, month:2, '3months':3, '6months':4, year:5, all:6 };
     const btns = document.querySelectorAll('#page-relatorios .period-btn');
-    if (btns[periodos[period]]) btns[periodos[period]].classList.add('active');
+    if (btns[periodos[period]] !== undefined) btns[periodos[period]].classList.add('active');
     const lbl = document.getElementById('rel-period-label');
     if (lbl) lbl.textContent = periodLabel(period);
   }, 50);
@@ -1428,10 +1745,40 @@ function setReportPeriod(period, btn) {
   renderRelatorios();
 }
 
+function clearRepFilters() {
+  ['rep-filter-dept','rep-filter-user','rep-filter-tipo'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  renderRelatorios();
+}
+
 function renderRelatorios() {
   if (!currentCompany) return;
   const currency = currentCompany.currency || 'MZN';
   const isFunc   = currentUser.role === 'funcionario';
+
+  // Mostrar barra de filtros para gestores/admins
+  const filtersBar = document.getElementById('rep-filters-bar');
+  if (filtersBar) {
+    if (!isFunc) {
+      filtersBar.classList.remove('hidden');
+      filtersBar.style.display = 'flex';
+      // Popular dropdown de utilizadores da empresa
+      const userSel = document.getElementById('rep-filter-user');
+      if (userSel) {
+        const currentVal = userSel.value;
+        const users = DB.getUsersByCompany(currentCompany.id)
+          .filter(u => u.id !== currentUser.id || !isFunc)
+          .sort((a,b) => a.name.localeCompare(b.name));
+        userSel.innerHTML = '<option value="">Todos os Funcionários</option>' +
+          users.map(u => `<option value="${u.id}" ${u.id===currentVal?'selected':''}>${u.name}</option>`).join('');
+      }
+    } else {
+      filtersBar.classList.add('hidden');
+      filtersBar.style.display = 'none';
+    }
+  }
 
   // Funcionário vê só as suas; gestores vêem todas
   let all = isFunc
@@ -1439,6 +1786,16 @@ function renderRelatorios() {
     : DB.getExpensesByCompany(currentCompany.id);
   all = all.filter(e => e.status !== 'draft');
   let list = filterByPeriod(all, reportPeriod);
+
+  // Aplicar filtros adicionais (managers)
+  if (!isFunc) {
+    const fDept = document.getElementById('rep-filter-dept')?.value || '';
+    const fUser = document.getElementById('rep-filter-user')?.value || '';
+    const fTipo = document.getElementById('rep-filter-tipo')?.value || '';
+    if (fDept) list = list.filter(e => e.dept === fDept);
+    if (fUser) list = list.filter(e => e.userId === fUser);
+    if (fTipo) list = list.filter(e => e.expenseType === fTipo);
+  }
 
   const total = list.reduce((s,e) => s+(e.valor||0), 0);
   const count = list.length;
@@ -1528,21 +1885,28 @@ function renderRelatorios() {
 
   // ── Tabela clicável ──
   const tbody = document.getElementById('rep-table-body');
+  const countEl = document.getElementById('rep-table-count');
   if (!tbody) return;
+  if (countEl) countEl.textContent = list.length;
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" class="empty-state">Sem dados para ${periodLabel(reportPeriod)}.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Sem dados para ${periodLabel(reportPeriod)}.</td></tr>`;
     return;
   }
   const sorted = [...list].sort((a,b) => (b.data||'').localeCompare(a.data||''));
   tbody.innerHTML = sorted.map(e => {
     const user = DB.getUser(e.userId);
+    const userName = user ? user.name : '—';
+    const dept = e.dept || '—';
+    const deptLabel = { admin:'Administração', financas:'Finanças', operacoes:'Operações', rh:'Recursos Humanos', logistica:'Logística', campo:'Campo' }[dept] || dept;
     return `<tr class="table-row-clickable" onclick="openExpenseDetail('${e.id}')">
       <td>${fmtDate(e.data)}</td>
-      <td>${e.type==='procurement'?'🛒 Proc.':(e.type==='campo-pedido'?'📋 Pedido':'🌍 Campo')}</td>
-      <td>${expenseName(e)}${!isFunc && user ? `<br/><small style="color:var(--text-secondary)">${user.name}</small>` : ''}</td>
+      <td>${isFunc ? '—' : userName}</td>
+      <td>${isFunc ? '—' : deptLabel}</td>
+      <td>${expenseName(e)}</td>
       <td>${typeLabel(e.expenseType||e.type)}</td>
       <td><strong>${fmtCurrency(e.valor||0, e.moeda||currency)}</strong></td>
       <td><span class="status-badge ${e.status}">${statusLabel(e.status)}</span></td>
+      <td><button class="btn btn-sm btn-outline" onclick="event.stopPropagation();printExpense('${e.id}')">🖨️</button></td>
     </tr>`;
   }).join('');
 }
@@ -1874,6 +2238,50 @@ function exportReport() {
   showToast('CSV exportado! ⬇️', 'success');
 }
 
+function printExpense(id) {
+  const e = DB.getExpense(id);
+  if (!e) return;
+  const user = DB.getUser(e.userId);
+  const currency = currentCompany?.currency || 'MZN';
+  const win = window.open('', '_blank', 'width=700,height=900');
+  win.document.write(`
+    <!DOCTYPE html><html><head>
+    <meta charset="utf-8"/>
+    <title>Despesa – ${expenseName(e)}</title>
+    <style>
+      body { font-family: Arial, sans-serif; padding: 30px; font-size: 14px; color: #222; }
+      h2 { color: #1E3A5F; margin-bottom: 4px; }
+      .sub { color: #888; font-size: 12px; margin-bottom: 20px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+      th { background: #1E3A5F; color: #fff; padding: 8px 12px; text-align: left; font-size: 12px; }
+      td { padding: 8px 12px; border-bottom: 1px solid #eee; }
+      tr:nth-child(even) td { background: #f9f9f9; }
+      .status { font-weight: bold; }
+      .footer { margin-top: 30px; font-size: 11px; color: #aaa; text-align: center; }
+    </style></head><body>
+    <h2>${expenseName(e)}</h2>
+    <div class="sub">Despesa ID: ${e.id} &nbsp;·&nbsp; ${currentCompany?.name || ''}</div>
+    <table>
+      <tr><th>Campo</th><th>Valor</th></tr>
+      <tr><td>Data</td><td>${fmtDate(e.data)}</td></tr>
+      <tr><td>Funcionário</td><td>${user ? user.name : '—'}</td></tr>
+      <tr><td>Departamento</td><td>${e.dept || '—'}</td></tr>
+      <tr><td>Tipo</td><td>${e.type === 'procurement' ? 'Procurement' : 'Campo'}</td></tr>
+      <tr><td>Categoria</td><td>${typeLabel(e.expenseType || e.type)}</td></tr>
+      <tr><td>Valor</td><td><strong>${fmtCurrency(e.valor || 0, e.moeda || currency)}</strong></td></tr>
+      <tr><td>Local</td><td>${e.local || '—'}</td></tr>
+      <tr><td>Projeto</td><td>${e.projeto || '—'}</td></tr>
+      <tr><td>Pagamento</td><td>${payMethodLabel(e.paymentMethod)}</td></tr>
+      <tr><td>Estado</td><td class="status">${statusLabel(e.status)}</td></tr>
+      ${e.comentario ? `<tr><td>Comentário</td><td>${e.comentario}</td></tr>` : ''}
+    </table>
+    <div class="footer">Impresso em ${new Date().toLocaleString('pt-PT')} &nbsp;·&nbsp; SGDC Sistema de Gestão de Despesas de Campo</div>
+    <script>window.onload=()=>{window.print();}<\/script>
+    </body></html>
+  `);
+  win.document.close();
+}
+
 function downloadPDFReport() {
   if (typeof ReportPDF === 'undefined') { showToast('Módulo PDF não disponível', 'error'); return; }
   let list = DB.getExpensesByCompany(currentCompany.id).filter(e => e.status !== 'draft');
@@ -1928,6 +2336,390 @@ function sendScheduledReport() {
   showToast('Relatório enviado! ✅', 'success');
 }
 
+// ══════════════════════════════════════════════
+// ── FORNECEDORES ──
+// ══════════════════════════════════════════════
+const FORN_TIPO_LABEL = {
+  hotel:'🏨 Hotel/Alojamento', restaurante:'🍽️ Restaurante',
+  transporte:'🚗 Transportadora', comunicacao:'📞 Comunicações', outro:'⚙️ Outro'
+};
+const FORN_PAG_LABEL = { pronto:'💵 Pronto Pagamento', credito:'🏦 A Prazo (Crédito)' };
+
+function renderFornecedores() {
+  if (!currentCompany) return;
+  const q     = (document.getElementById('forn-search-page')?.value || '').toLowerCase();
+  const tipo  = document.getElementById('forn-filter-tipo')?.value || '';
+  const pag   = document.getElementById('forn-filter-pag')?.value  || '';
+  let list    = DB.getFornecedoresByCompany(currentCompany.id);
+
+  if (q)    list = list.filter(f => (f.nome+f.nuit+f.contacto).toLowerCase().includes(q));
+  if (tipo) list = list.filter(f => f.tipo === tipo);
+  if (pag)  list = list.filter(f => f.modalidade === pag);
+
+  // Stats
+  const statsEl = document.getElementById('forn-stats');
+  if (statsEl) {
+    const all = DB.getFornecedoresByCompany(currentCompany.id);
+    const credito = all.filter(f=>f.modalidade==='credito').length;
+    statsEl.innerHTML = `
+      <div class="stat-card"><div class="stat-value">${all.length}</div><div class="stat-label">Total Fornecedores</div></div>
+      <div class="stat-card"><div class="stat-value">${all.filter(f=>f.tipo==='hotel').length}</div><div class="stat-label">Hotéis/Alojamento</div></div>
+      <div class="stat-card"><div class="stat-value">${all.filter(f=>f.tipo==='restaurante').length}</div><div class="stat-label">Restaurantes</div></div>
+      <div class="stat-card"><div class="stat-value" style="color:var(--warning)">${credito}</div><div class="stat-label">A Prazo/Crédito</div></div>`;
+  }
+
+  const container = document.getElementById('forn-list-container');
+  if (!container) return;
+  if (list.length === 0) {
+    container.innerHTML = '<p class="empty-state">Nenhum fornecedor encontrado.</p>'; return;
+  }
+  container.innerHTML = `<div class="forn-grid">${list.map(f => `
+    <div class="forn-page-card">
+      <div class="forn-page-card-head">
+        <div class="forn-page-icon">${FORN_TIPO_LABEL[f.tipo]?.charAt(0) || '🏢'}</div>
+        <div class="forn-page-info">
+          <div class="forn-page-nome">${f.nome}</div>
+          <div class="forn-page-meta">${FORN_TIPO_LABEL[f.tipo]||f.tipo}</div>
+        </div>
+        <span class="forn-pag-badge ${f.modalidade}">${FORN_PAG_LABEL[f.modalidade]||f.modalidade}</span>
+      </div>
+      <div class="forn-page-details">
+        ${f.nuit ? `<span>🔢 NUIT: <strong>${f.nuit}</strong></span>` : ''}
+        ${f.contacto ? `<span>📞 ${f.contacto}</span>` : ''}
+        ${f.endereco ? `<span>📍 ${f.endereco}</span>` : ''}
+      </div>
+      ${f.obs ? `<div class="forn-page-obs">${f.obs}</div>` : ''}
+      <div class="forn-page-actions">
+        <button class="btn btn-sm btn-outline" onclick="openFornecedorModal('${f.id}')">✏️ Editar</button>
+        <button class="btn btn-sm btn-outline" style="color:var(--danger)" onclick="deleteFornecedorPage('${f.id}')">🗑️ Remover</button>
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+function openFornecedorModal(id) {
+  const f = id ? DB.getFornecedor(id) : null;
+  document.getElementById('modal-forn-title').textContent = f ? 'Editar Fornecedor' : 'Novo Fornecedor';
+  document.getElementById('modal-forn-id').value       = f?.id || '';
+  document.getElementById('modal-forn-nome').value     = f?.nome || '';
+  document.getElementById('modal-forn-nuit').value     = f?.nuit || '';
+  document.getElementById('modal-forn-endereco').value = f?.endereco || '';
+  document.getElementById('modal-forn-contacto').value = f?.contacto || '';
+  document.getElementById('modal-forn-tipo').value     = f?.tipo || 'hotel';
+  document.getElementById('modal-forn-pag').value      = f?.modalidade || 'pronto';
+  document.getElementById('modal-forn-rodape').value   = f?.rodape || '';
+  document.getElementById('modal-forn-obs').value      = f?.obs || '';
+  openModal('modal-fornecedor');
+}
+
+function saveFornecedorModal() {
+  const nome = document.getElementById('modal-forn-nome').value.trim();
+  if (!nome) { showToast('Nome do fornecedor obrigatório', 'error'); return; }
+  const id = document.getElementById('modal-forn-id').value || DB.uid();
+  DB.saveFornecedor({
+    id, companyId: currentCompany.id,
+    nome,
+    nuit:      document.getElementById('modal-forn-nuit').value.trim(),
+    endereco:  document.getElementById('modal-forn-endereco').value.trim(),
+    contacto:  document.getElementById('modal-forn-contacto').value.trim(),
+    tipo:      document.getElementById('modal-forn-tipo').value,
+    modalidade:document.getElementById('modal-forn-pag').value,
+    rodape:    document.getElementById('modal-forn-rodape').value.trim(),
+    obs:       document.getElementById('modal-forn-obs').value.trim(),
+    criadoEm:  new Date().toISOString(),
+  });
+  closeModal('modal-fornecedor');
+  renderFornecedores();
+  showToast('Fornecedor guardado ✅', 'success');
+}
+
+function deleteFornecedorPage(id) {
+  if (!confirm('Remover este fornecedor?')) return;
+  DB.deleteFornecedor(id);
+  renderFornecedores();
+  showToast('Fornecedor removido', 'info');
+}
+
+// ── Fornecedor inline no formulário de campo ──
+let _fornSelecionado = null;
+
+function searchFornecedor(q) {
+  const dd = document.getElementById('campo-forn-dropdown');
+  if (!dd || !currentCompany) return;
+  if (!q || q.length < 2) { dd.classList.add('hidden'); return; }
+  const list = DB.getFornecedoresByCompany(currentCompany.id)
+    .filter(f => (f.nome+f.nuit+f.contacto).toLowerCase().includes(q.toLowerCase()))
+    .slice(0, 6);
+  if (list.length === 0) {
+    dd.innerHTML = '<div class="forn-dd-item forn-dd-empty">Nenhum resultado — adicione abaixo</div>';
+  } else {
+    dd.innerHTML = list.map(f => `
+      <div class="forn-dd-item" onclick="selectFornecedor('${f.id}')">
+        <span class="forn-dd-nome">${f.nome}</span>
+        <span class="forn-dd-meta">${FORN_TIPO_LABEL[f.tipo]||''} · ${FORN_PAG_LABEL[f.modalidade]||''}</span>
+      </div>`).join('');
+  }
+  dd.classList.remove('hidden');
+}
+
+function selectFornecedor(id) {
+  const f = DB.getFornecedor(id);
+  if (!f) return;
+  _fornSelecionado = f;
+  document.getElementById('campo-forn-search').value = '';
+  document.getElementById('campo-forn-dropdown').classList.add('hidden');
+  document.getElementById('campo-forn-nome-disp').textContent = f.nome;
+  document.getElementById('campo-forn-nuit-disp').textContent = f.nuit ? `NUIT: ${f.nuit}` : '';
+  document.getElementById('campo-forn-tipo-disp').textContent = FORN_TIPO_LABEL[f.tipo] || '';
+  document.getElementById('campo-forn-pag-disp').textContent  = FORN_PAG_LABEL[f.modalidade] || '';
+  document.getElementById('campo-forn-selected').classList.remove('hidden');
+  // Ocultar form de novo fornecedor se estiver aberto
+  document.getElementById('campo-forn-novo-wrap')?.classList.add('hidden');
+  document.getElementById('btn-toggle-forn').textContent = '+ Adicionar Novo Fornecedor';
+}
+
+function clearFornecedor() {
+  _fornSelecionado = null;
+  document.getElementById('campo-forn-search').value = '';
+  document.getElementById('campo-forn-selected').classList.add('hidden');
+}
+
+function toggleNovoFornecedor() {
+  const wrap = document.getElementById('campo-forn-novo-wrap');
+  const btn  = document.getElementById('btn-toggle-forn');
+  if (!wrap) return;
+  const showing = !wrap.classList.contains('hidden');
+  wrap.classList.toggle('hidden', showing);
+  btn.textContent = showing ? '+ Adicionar Novo Fornecedor' : '− Cancelar';
+}
+
+// ══════════════════════════════════════════════
+// ── IVA / FATURAÇÃO (Moçambique – 16%) ──
+// ══════════════════════════════════════════════
+function onIVAChange() {
+  const comIVA = document.querySelector('input[name="campo-iva"]:checked')?.value === 'sim';
+  document.getElementById('campo-iva-taxa-wrap')?.classList.toggle('hidden', !comIVA);
+  document.getElementById('campo-iva-regime-wrap')?.classList.toggle('hidden', !comIVA);
+  document.getElementById('campo-iva-banner')?.classList.toggle('hidden', !comIVA);
+  calcCampoTotal();
+}
+
+function _getIVAInfo() {
+  const comIVA = document.querySelector('input[name="campo-iva"]:checked')?.value === 'sim';
+  const taxa   = parseFloat(document.getElementById('campo-iva-taxa')?.value || '16') || 16;
+  const regime = document.getElementById('campo-iva-regime')?.value || 'normal';
+  return { comIVA, taxa, regime };
+}
+
+function _updateIVABanner(subtotal, moeda) {
+  const { comIVA, taxa } = _getIVAInfo();
+  if (!comIVA) return;
+  const ivaVal = subtotal * (taxa / 100);
+  const total  = subtotal + ivaVal;
+  document.getElementById('campo-iva-pct-label').textContent  = taxa;
+  document.getElementById('campo-subtotal-disp').textContent  = fmtCurrency(subtotal, moeda);
+  document.getElementById('campo-iva-valor-disp').textContent = fmtCurrency(ivaVal, moeda);
+  document.getElementById('campo-total-iva-disp').textContent = fmtCurrency(total, moeda);
+}
+
+// ── Guardar fornecedor inline ao submeter ──
+function _saveFornecedorInline() {
+  if (_fornSelecionado) return _fornSelecionado;
+  const nome = document.getElementById('campo-forn-nome')?.value.trim();
+  if (!nome) return null;
+  const guardar = document.getElementById('campo-forn-guardar')?.checked;
+  const f = {
+    id: DB.uid(), companyId: currentCompany.id,
+    nome,
+    nuit:      document.getElementById('campo-forn-nuit')?.value.trim() || '',
+    contacto:  document.getElementById('campo-forn-contacto')?.value.trim() || '',
+    tipo:      document.getElementById('campo-forn-tipo')?.value || 'outro',
+    modalidade:document.querySelector('input[name="campo-forn-pag"]:checked')?.value || 'pronto',
+    criadoEm:  new Date().toISOString(),
+  };
+  if (guardar) DB.saveFornecedor(f);
+  return f;
+}
+
+// ── Fornecedor no Pedido de Aprovação ──
+let _fornSelecionadoPedido = null;
+
+function searchFornecedorPedido(q) {
+  const dd = document.getElementById('pedido-forn-dropdown');
+  if (!dd || !currentCompany) return;
+  if (!q || q.length < 2) { dd.classList.add('hidden'); return; }
+  const list = DB.getFornecedoresByCompany(currentCompany.id)
+    .filter(f => (f.nome+f.nuit+f.contacto).toLowerCase().includes(q.toLowerCase()))
+    .slice(0, 6);
+  if (list.length === 0) {
+    dd.innerHTML = '<div class="forn-dd-item forn-dd-empty">Nenhum resultado — adicione abaixo</div>';
+  } else {
+    dd.innerHTML = list.map(f => `
+      <div class="forn-dd-item" onclick="selectFornecedorPedido('${f.id}')">
+        <span class="forn-dd-nome">${f.nome}</span>
+        <span class="forn-dd-meta">${FORN_TIPO_LABEL[f.tipo]||''} · ${FORN_PAG_LABEL[f.modalidade]||''}</span>
+      </div>`).join('');
+  }
+  dd.classList.remove('hidden');
+}
+
+function selectFornecedorPedido(id) {
+  const f = DB.getFornecedor(id);
+  if (!f) return;
+  _fornSelecionadoPedido = f;
+  document.getElementById('pedido-forn-search').value = '';
+  document.getElementById('pedido-forn-dropdown').classList.add('hidden');
+  document.getElementById('pedido-forn-nome-disp').textContent = f.nome;
+  document.getElementById('pedido-forn-nuit-disp').textContent = f.nuit ? `NUIT: ${f.nuit}` : '';
+  document.getElementById('pedido-forn-tipo-disp').textContent = FORN_TIPO_LABEL[f.tipo] || '';
+  document.getElementById('pedido-forn-pag-disp').textContent  = FORN_PAG_LABEL[f.modalidade] || '';
+  document.getElementById('pedido-forn-selected').classList.remove('hidden');
+  document.getElementById('pedido-forn-novo-wrap')?.classList.add('hidden');
+  document.getElementById('btn-toggle-pedido-forn').textContent = '+ Adicionar Novo Fornecedor';
+}
+
+function clearFornecedorPedido() {
+  _fornSelecionadoPedido = null;
+  document.getElementById('pedido-forn-search').value = '';
+  document.getElementById('pedido-forn-selected').classList.add('hidden');
+}
+
+function toggleNovoFornecedorPedido() {
+  const wrap = document.getElementById('pedido-forn-novo-wrap');
+  const btn  = document.getElementById('btn-toggle-pedido-forn');
+  if (!wrap) return;
+  const showing = !wrap.classList.contains('hidden');
+  wrap.classList.toggle('hidden', showing);
+  btn.textContent = showing ? '+ Adicionar Novo Fornecedor' : '− Cancelar';
+}
+
+function _saveFornecedorPedidoInline() {
+  if (_fornSelecionadoPedido) return _fornSelecionadoPedido;
+  const nome = document.getElementById('pedido-forn-nome')?.value.trim();
+  if (!nome) return null;
+  const guardar = document.getElementById('pedido-forn-guardar')?.checked;
+  const f = {
+    id: DB.uid(), companyId: currentCompany.id,
+    nome,
+    nuit:      document.getElementById('pedido-forn-nuit')?.value.trim() || '',
+    contacto:  document.getElementById('pedido-forn-contacto')?.value.trim() || '',
+    tipo:      document.getElementById('pedido-forn-tipo')?.value || 'outro',
+    modalidade:document.querySelector('input[name="pedido-forn-pag"]:checked')?.value || 'pronto',
+    criadoEm:  new Date().toISOString(),
+  };
+  if (guardar) DB.saveFornecedor(f);
+  return f;
+}
+
+// ── Fornecedor no Planeamento ──
+let _fornSelecionadoPlan = null;
+
+function searchFornecedorPlan(q) {
+  const dd = document.getElementById('plan-forn-dropdown');
+  if (!dd || !currentCompany) return;
+  if (!q || q.length < 2) { dd.classList.add('hidden'); return; }
+  const list = DB.getFornecedoresByCompany(currentCompany.id)
+    .filter(f => (f.nome+f.nuit+f.contacto).toLowerCase().includes(q.toLowerCase()))
+    .slice(0, 6);
+  if (list.length === 0) {
+    dd.innerHTML = '<div class="forn-dd-item forn-dd-empty">Nenhum resultado — adicione abaixo</div>';
+  } else {
+    dd.innerHTML = list.map(f => `
+      <div class="forn-dd-item" onclick="selectFornecedorPlan('${f.id}')">
+        <span class="forn-dd-nome">${f.nome}</span>
+        <span class="forn-dd-meta">${FORN_TIPO_LABEL[f.tipo]||''} · ${FORN_PAG_LABEL[f.modalidade]||''}</span>
+      </div>`).join('');
+  }
+  dd.classList.remove('hidden');
+}
+function selectFornecedorPlan(id) {
+  const f = DB.getFornecedor(id);
+  if (!f) return;
+  _fornSelecionadoPlan = f;
+  document.getElementById('plan-forn-search').value = '';
+  document.getElementById('plan-forn-dropdown').classList.add('hidden');
+  document.getElementById('plan-forn-nome-disp').textContent = f.nome;
+  document.getElementById('plan-forn-meta-disp').textContent = `${FORN_TIPO_LABEL[f.tipo]||''} · ${FORN_PAG_LABEL[f.modalidade]||''}`;
+  document.getElementById('plan-forn-selected').classList.remove('hidden');
+  document.getElementById('plan-forn-novo-wrap')?.classList.add('hidden');
+  document.getElementById('btn-toggle-plan-forn').textContent = '+ Adicionar Novo Fornecedor';
+}
+function clearFornecedorPlan() {
+  _fornSelecionadoPlan = null;
+  document.getElementById('plan-forn-search').value = '';
+  document.getElementById('plan-forn-selected').classList.add('hidden');
+}
+function toggleFornecedorPlan() {
+  const wrap = document.getElementById('plan-forn-novo-wrap');
+  const btn  = document.getElementById('btn-toggle-plan-forn');
+  if (!wrap) return;
+  const showing = !wrap.classList.contains('hidden');
+  wrap.classList.toggle('hidden', showing);
+  btn.textContent = showing ? '+ Adicionar Novo Fornecedor' : '− Cancelar';
+}
+function _saveFornecedorPlanInline() {
+  if (_fornSelecionadoPlan) return _fornSelecionadoPlan;
+  const nome = document.getElementById('plan-forn-nome')?.value.trim();
+  if (!nome) return null;
+  const guardar = document.getElementById('plan-forn-guardar')?.checked;
+  const f = {
+    id: DB.uid(), companyId: currentCompany.id, nome,
+    nuit:      document.getElementById('plan-forn-nuit')?.value.trim() || '',
+    contacto:  document.getElementById('plan-forn-contacto')?.value.trim() || '',
+    tipo:      document.getElementById('plan-forn-tipo')?.value || 'outro',
+    modalidade:'pronto', criadoEm: new Date().toISOString(),
+  };
+  if (guardar) DB.saveFornecedor(f);
+  return f;
+}
+
+// ── GPS — capturar apenas coordenadas ──
+function captureGPSCoords(fieldId) {
+  const input = document.getElementById(fieldId);
+  if (!input) return;
+  if (!navigator.geolocation) {
+    showToast('GPS não disponível neste dispositivo', 'error'); return;
+  }
+  showToast('A capturar localização...', 'info');
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const lat = pos.coords.latitude.toFixed(6);
+      const lon = pos.coords.longitude.toFixed(6);
+      input.value = `${lat}, ${lon}`;
+      input.removeAttribute('readonly');
+      showToast(`📍 Localização capturada: ${lat}, ${lon}`, 'success');
+    },
+    err => {
+      showToast('Não foi possível capturar localização. Insira manualmente.', 'error');
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+
+// ── Número de documento automático ──
+function _gerarNumDoc(tipo) {
+  const prefix = tipo === 'fatura' ? 'FAT' : tipo === 'recibo' ? 'REC' : 'FR';
+  const year   = new Date().getFullYear();
+  const seq    = String(Math.floor(Math.random()*9000)+1000);
+  return `${prefix}-${year}-${seq}`;
+}
+
+// ── Auto-gerar nº documento ao mudar tipo ──
+document.addEventListener('DOMContentLoaded', () => {
+  const docTipo = document.getElementById('campo-doc-tipo');
+  if (docTipo) {
+    docTipo.addEventListener('change', () => {
+      const numEl = document.getElementById('campo-doc-num');
+      if (numEl && !numEl.value) numEl.value = _gerarNumDoc(docTipo.value);
+    });
+    // gerar na carga inicial
+    setTimeout(() => {
+      const numEl = document.getElementById('campo-doc-num');
+      if (numEl && !numEl.value) numEl.value = _gerarNumDoc(docTipo.value);
+    }, 500);
+  }
+});
+
+// ══════════════════════════════════════════════
 // ── ADIANTAMENTOS (removido) ──
 function renderAdiantamentos() { /* funcionalidade removida */ }
 function openNewAdvanceModal()  { /* removido */ }
@@ -2119,38 +2911,211 @@ function removeChainLevel(idx) {
 }
 
 // ── UTILIZADORES ──
+let userTab = 'lista'; // 'lista' | 'equipas'
+
+function switchUserTab(tab) {
+  userTab = tab;
+  ['lista','equipas'].forEach(t => {
+    document.getElementById(`tab-user-${t}`)?.classList.toggle('active', t === tab);
+  });
+  renderUtilizadores();
+}
+
 function renderUtilizadores() {
   if (!currentCompany) return;
-  const users = DB.getUsersByCompany(currentCompany.id);
+  const users = DB.getUsersByCompany(currentCompany.id).sort((a,b) => a.name.localeCompare(b.name));
   const container = document.getElementById('user-list-container');
   if (!container) return;
   if (users.length === 0) { container.innerHTML = '<p class="empty-state">Nenhum utilizador.</p>'; return; }
-  container.innerHTML = users.map(u => `
-    <div class="user-item">
-      <div class="user-item-avatar">${u.name.charAt(0).toUpperCase()}</div>
-      <div class="user-item-info">
-        <div class="user-item-name">${u.name}</div>
-        <div class="user-item-meta">${u.email}</div>
-      </div>
-      <span class="role-badge ${u.role}">${roleLabel(u.role)}</span>
-    </div>`).join('');
+
+  const userActions = (u) => u.id !== currentUser.id ? `
+    <div style="display:flex;gap:6px;margin-left:8px">
+      <button class="btn btn-sm btn-outline" onclick="editUser('${u.id}')" title="Editar">✏️</button>
+      <button class="btn btn-sm btn-danger-outline" onclick="deleteUser('${u.id}')" title="Remover">🗑️</button>
+    </div>` : '<span style="font-size:11px;color:var(--text-secondary);margin-left:8px">(você)</span>';
+
+  if (userTab === 'equipas') {
+    // ── Vista de equipas agrupadas por supervisor ──
+    const supervisorRoles = ['supervisor','coordenador','gestor','director','financeiro','admin'];
+    const supervisors = users.filter(u => supervisorRoles.includes(u.role));
+    const membros = users.filter(u => !supervisorRoles.includes(u.role));
+
+    let html = `<div style="margin-bottom:16px;color:var(--text-secondary);font-size:13px">${users.length} utilizador${users.length!==1?'es':''} · ${supervisors.length} supervisor${supervisors.length!==1?'es':''}</div>`;
+
+    supervisors.forEach(sup => {
+      const equipa = users.filter(u => u.supervisorId === sup.id);
+      html += `
+      <div class="team-group">
+        <div class="team-supervisor-row">
+          <div class="user-item-avatar sup-avatar">${sup.name.charAt(0).toUpperCase()}</div>
+          <div class="user-item-info">
+            <div class="user-item-name">${sup.name}</div>
+            <div class="user-item-meta">${sup.email}</div>
+          </div>
+          <span class="role-badge ${sup.role}">${roleLabel(sup.role)}</span>
+          ${userActions(sup)}
+        </div>
+        ${equipa.length > 0 ? `
+        <div class="team-members">
+          ${equipa.map(m => `
+          <div class="user-item team-member-item">
+            <div style="width:18px;color:var(--text-secondary);font-size:14px">↳</div>
+            <div class="user-item-avatar" style="width:32px;height:32px;font-size:13px">${m.name.charAt(0).toUpperCase()}</div>
+            <div class="user-item-info">
+              <div class="user-item-name">${m.name}</div>
+              <div class="user-item-meta">${m.email}</div>
+            </div>
+            <span class="role-badge ${m.role}">${roleLabel(m.role)}</span>
+            ${userActions(m)}
+          </div>`).join('')}
+        </div>` : '<div class="team-empty">Sem membros atribuídos a este supervisor</div>'}
+      </div>`;
+    });
+
+    // Mostrar membros sem supervisor
+    const semSup = membros.filter(u => !u.supervisorId || !users.find(s => s.id === u.supervisorId));
+    if (semSup.length > 0) {
+      html += `
+      <div class="team-group" style="margin-top:16px">
+        <div style="font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Sem Supervisor</div>
+        ${semSup.map(u => `
+        <div class="user-item">
+          <div class="user-item-avatar">${u.name.charAt(0).toUpperCase()}</div>
+          <div class="user-item-info">
+            <div class="user-item-name">${u.name}</div>
+            <div class="user-item-meta">${u.email}</div>
+          </div>
+          <span class="role-badge ${u.role}">${roleLabel(u.role)}</span>
+          ${userActions(u)}
+        </div>`).join('')}
+      </div>`;
+    }
+    container.innerHTML = html;
+
+  } else {
+    // ── Vista de lista normal ──
+    container.innerHTML = `
+      <div style="margin-bottom:12px;color:var(--text-secondary);font-size:13px">${users.length} utilizador${users.length!==1?'es':''} nesta empresa</div>
+      ${users.map(u => {
+        const supUser = u.supervisorId ? users.find(s => s.id === u.supervisorId) : null;
+        return `
+        <div class="user-item">
+          <div class="user-item-avatar">${u.name.charAt(0).toUpperCase()}</div>
+          <div class="user-item-info">
+            <div class="user-item-name">${u.name}</div>
+            <div class="user-item-meta">${u.email}${supUser ? ` · Supervisor: ${supUser.name}` : ''}</div>
+          </div>
+          <span class="role-badge ${u.role}">${roleLabel(u.role)}</span>
+          ${userActions(u)}
+        </div>`;
+      }).join('')}`;
+  }
 }
-function openUserModal() { openModal('modal-user'); }
-function createUser() {
-  const name  = document.getElementById('new-user-name').value.trim();
-  const email = document.getElementById('new-user-email').value.trim();
-  const pass  = document.getElementById('new-user-pass').value;
-  const role  = document.getElementById('new-user-role').value;
-  if (!name || !email || !pass) { showToast('Preencha todos os campos', 'error'); return; }
-  if (pass.length < 6) { showToast('Palavra-passe: mínimo 6 caracteres', 'error'); return; }
-  if (DB.findUserByEmail(email)) { showToast('Email já registado', 'error'); return; }
-  DB.saveUser({ id: DB.uid(), companyId: currentCompany.id, name, email, password: pass, role });
-  closeModal('modal-user');
-  showToast(`Utilizador ${name} criado! 👤`, 'success');
+
+function _populateSupervisorDropdown(selectedId) {
+  const sel = document.getElementById('new-user-supervisor');
+  if (!sel || !currentCompany) return;
+  const supervisorRoles = ['supervisor','coordenador','gestor','director','financeiro','admin'];
+  const supervisors = DB.getUsersByCompany(currentCompany.id)
+    .filter(u => supervisorRoles.includes(u.role))
+    .sort((a,b) => a.name.localeCompare(b.name));
+  sel.innerHTML = '<option value="">— Sem supervisor atribuído —</option>' +
+    supervisors.map(s => `<option value="${s.id}" ${s.id === selectedId ? 'selected' : ''}>${s.name} (${roleLabel(s.role)})</option>`).join('');
+}
+
+function onUserRoleChange() {
+  const role = document.getElementById('new-user-role')?.value;
+  // Para admin/director/gestor/financeiro o campo supervisor é opcional mas visível
+  // Apenas escondemos quando não faz sentido (ex: o próprio admin não precisa de supervisor visível)
+  const supGroup = document.getElementById('user-supervisor-group');
+  if (supGroup) supGroup.classList.toggle('hidden', role === 'admin');
+  _populateSupervisorDropdown('');
+}
+
+function gerarPasswordUtilizador() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#!';
+  let pass = '';
+  for (let i = 0; i < 10; i++) pass += chars[Math.floor(Math.random() * chars.length)];
+  const el = document.getElementById('new-user-pass');
+  if (el) el.value = pass;
+  const hint = document.getElementById('new-user-pass-copy');
+  if (hint) hint.classList.remove('hidden');
+  showToast(`Palavra-passe gerada: ${pass}`, 'info');
+}
+
+function openUserModal() {
+  ['new-user-name','new-user-email'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('new-user-pass').value = '';
+  document.getElementById('new-user-role').value = 'funcionario';
+  document.getElementById('new-user-pass-copy')?.classList.add('hidden');
+  document.getElementById('modal-user-title') && (document.getElementById('modal-user-title').textContent = '👤 Novo Utilizador');
+  // Reset supervisor
+  document.getElementById('user-supervisor-group')?.classList.remove('hidden');
+  _populateSupervisorDropdown('');
+  document.getElementById('modal-user')._editId = null;
+  openModal('modal-user');
+}
+
+function editUser(id) {
+  const u = DB.getUser(id);
+  if (!u) return;
+  document.getElementById('new-user-name').value  = u.name;
+  document.getElementById('new-user-email').value = u.email;
+  document.getElementById('new-user-pass').value  = '';
+  document.getElementById('new-user-role').value  = u.role;
+  document.getElementById('new-user-pass-copy')?.classList.add('hidden');
+  // Supervisor
+  const supGroup = document.getElementById('user-supervisor-group');
+  if (supGroup) supGroup.classList.toggle('hidden', u.role === 'admin');
+  _populateSupervisorDropdown(u.supervisorId || '');
+  // store editing ID on modal
+  document.getElementById('modal-user')._editId = id;
+  openModal('modal-user');
+}
+
+function deleteUser(id) {
+  const u = DB.getUser(id);
+  if (!u || !confirm(`Remover o utilizador "${u.name}"? Esta ação não pode ser desfeita.`)) return;
+  const users = DB.getUsers().filter(x => x.id !== id);
+  DB._set(DB.KEYS.USERS, users);
   renderUtilizadores();
-  ['new-user-name','new-user-email','new-user-pass'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.value = '';
-  });
+  showToast('Utilizador removido', 'info');
+}
+
+function createUser() {
+  const name       = document.getElementById('new-user-name').value.trim();
+  const email      = document.getElementById('new-user-email').value.trim();
+  const pass       = document.getElementById('new-user-pass').value;
+  const role       = document.getElementById('new-user-role').value;
+  const supervisorId = document.getElementById('new-user-supervisor')?.value || '';
+  const modal      = document.getElementById('modal-user');
+  const editId     = modal?._editId || null;
+
+  if (!name || !email) { showToast('Preencha nome e email', 'error'); return; }
+
+  if (editId) {
+    // Editing existing user
+    const u = DB.getUser(editId);
+    if (!u) return;
+    u.name = name; u.email = email; u.role = role;
+    u.supervisorId = supervisorId || null;
+    if (pass && pass.length >= 6) u.password = pass;
+    else if (pass && pass.length < 6) { showToast('Palavra-passe: mínimo 6 caracteres', 'error'); return; }
+    DB.saveUser(u);
+    if (modal) modal._editId = null;
+    closeModal('modal-user');
+    showToast(`Utilizador ${name} atualizado! ✓`, 'success');
+  } else {
+    // New user
+    if (!pass) { showToast('Preencha a palavra-passe', 'error'); return; }
+    if (pass.length < 6) { showToast('Palavra-passe: mínimo 6 caracteres', 'error'); return; }
+    const existing = DB.findUserByEmail(email);
+    if (existing) { showToast('Email já registado', 'error'); return; }
+    DB.saveUser({ id: DB.uid(), companyId: currentCompany.id, name, email, password: pass, role, supervisorId: supervisorId || null });
+    closeModal('modal-user');
+    showToast(`Utilizador ${name} criado! 👤`, 'success');
+  }
+  renderUtilizadores();
 }
 
 // ── PERFIL ──
@@ -2181,16 +3146,386 @@ function openGPSForField(targetField) {
   else showToast('GPS não disponível', 'error');
 }
 
-// ── TOPBAR SEARCH ──
+// ══════════════════════════════════════════════
+// ── PESQUISA GLOBAL (dropdown ao vivo) ──
+// ══════════════════════════════════════════════
+let _searchTimer = null;
+let _currentExpId = null; // track currently open expense
+
 function handleTopbarSearch(q) {
-  q = q.trim().toLowerCase();
-  if (!q) return;
-  // Navigate to expenses page and filter by query
+  clearTimeout(_searchTimer);
+  const dd = document.getElementById('search-dropdown');
+  if (!q || q.trim().length < 2) { dd?.classList.add('hidden'); return; }
+  _searchTimer = setTimeout(() => _runGlobalSearch(q.trim()), 200);
+}
+
+function handleSearchKey(e) {
+  if (e.key === 'Escape') {
+    document.getElementById('search-dropdown')?.classList.add('hidden');
+    document.getElementById('topbar-search-input').blur();
+  }
+  if (e.key === 'Enter') {
+    const q = e.target.value.trim();
+    if (q) _goToSearchPage(q);
+  }
+}
+
+function _runGlobalSearch(q) {
+  if (!currentCompany) return;
+  const dd = document.getElementById('search-dropdown');
+  if (!dd) return;
+  const ql = q.toLowerCase();
+  const currency = currentCompany.currency || 'MZN';
+  const isFunc = currentUser.role === 'funcionario';
+  const results = [];
+
+  // Despesas
+  const allExp = isFunc
+    ? DB.getExpensesByUser(currentUser.id)
+    : DB.getExpensesByCompany(currentCompany.id);
+  allExp.filter(e =>
+    expenseName(e).toLowerCase().includes(ql) ||
+    (e.local||'').toLowerCase().includes(ql) ||
+    (e.projeto||'').toLowerCase().includes(ql) ||
+    (e.id||'').toLowerCase().startsWith(ql) ||
+    (e.comentario||'').toLowerCase().includes(ql)
+  ).slice(0, 5).forEach(e => {
+    const u = DB.getUser(e.userId);
+    results.push({
+      icon: expenseIcon(e),
+      title: expenseName(e),
+      sub: `${fmtDate(e.data)} · ${fmtCurrency(e.valor||0, e.moeda||currency)}${u && !isFunc ? ' · '+u.name : ''}`,
+      badge: `<span class="status-badge ${e.status}" style="font-size:10px">${statusLabel(e.status)}</span>`,
+      action: `openExpenseDetail('${e.id}'); closeSearchDropdown();`,
+      type: 'despesa'
+    });
+  });
+
+  // Fornecedores
+  DB.getFornecedoresByCompany(currentCompany.id).filter(f =>
+    (f.nome||'').toLowerCase().includes(ql) ||
+    (f.nuit||'').toLowerCase().includes(ql) ||
+    (f.contacto||'').toLowerCase().includes(ql)
+  ).slice(0, 3).forEach(f => {
+    results.push({
+      icon: '🏢',
+      title: f.nome,
+      sub: `${FORN_TIPO_LABEL[f.tipo]||f.tipo}${f.nuit ? ' · NUIT: '+f.nuit : ''}`,
+      badge: '',
+      action: `showPage('page-fornecedores'); closeSearchDropdown(); setTimeout(()=>{const s=document.getElementById('forn-search-page');if(s){s.value='${f.nome.replace(/'/g,"\\'")}';renderFornecedores();}},200);`,
+      type: 'fornecedor'
+    });
+  });
+
+  // Planos
+  DB.getPlansByCompany(currentCompany.id).filter(p =>
+    isFunc ? p.createdBy === currentUser.id : true
+  ).filter(p =>
+    (p.desc||'').toLowerCase().includes(ql) ||
+    (p.local||'').toLowerCase().includes(ql) ||
+    (p.projeto||'').toLowerCase().includes(ql)
+  ).slice(0, 3).forEach(p => {
+    const planIcons = { campo:'🌍', viagem:'✈️', alojamento:'🏨', formacao:'📚', reuniao:'🤝' };
+    results.push({
+      icon: planIcons[p.tipo] || '📅',
+      title: p.desc,
+      sub: `${fmtDate(p.inicio)} → ${fmtDate(p.fim)} · 📍 ${p.local||'—'}`,
+      badge: '',
+      action: `showPage('page-planeamento'); closeSearchDropdown();`,
+      type: 'plano'
+    });
+  });
+
+  if (results.length === 0) {
+    dd.innerHTML = `<div class="search-dd-empty">Sem resultados para "<strong>${q}</strong>"</div>`;
+  } else {
+    const typeLabel = { despesa:'💳 Despesas', fornecedor:'🏢 Fornecedores', plano:'📅 Planos' };
+    let lastType = null;
+    dd.innerHTML = results.map(r => {
+      const sep = r.type !== lastType ? `<div class="search-dd-sep">${typeLabel[r.type]}</div>` : '';
+      lastType = r.type;
+      return `${sep}<div class="search-dd-item" onclick="${r.action}">
+        <span class="search-dd-icon">${r.icon}</span>
+        <div class="search-dd-info">
+          <div class="search-dd-title">${r.title}</div>
+          <div class="search-dd-sub">${r.sub}</div>
+        </div>
+        ${r.badge}
+      </div>`;
+    }).join('') + `<div class="search-dd-footer" onclick="_goToSearchPage('${q}');closeSearchDropdown()">
+      Ver todos os resultados para "<strong>${q}</strong>" →
+    </div>`;
+  }
+  dd.classList.remove('hidden');
+}
+
+function _goToSearchPage(q) {
+  document.getElementById('search-dropdown')?.classList.add('hidden');
   showPage('page-despesas');
   setTimeout(() => {
     const filterEl = document.getElementById('filter-search');
     if (filterEl) { filterEl.value = q; renderExpenseList(); }
   }, 100);
+}
+
+function closeSearchDropdown() {
+  document.getElementById('search-dropdown')?.classList.add('hidden');
+  document.getElementById('topbar-search-input').value = '';
+}
+
+// Fechar dropdown ao clicar fora
+document.addEventListener('click', e => {
+  const wrap = document.querySelector('.topbar-search');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('search-dropdown')?.classList.add('hidden');
+  }
+});
+
+// ══════════════════════════════════════════════
+// ── HISTÓRICO DE ALTERAÇÕES ──
+// ══════════════════════════════════════════════
+
+function _addHistory(exp, action, detail = '', userId = null) {
+  if (!exp.history) exp.history = [];
+  exp.history.push({
+    ts: new Date().toISOString(),
+    action,
+    detail,
+    userId: userId || currentUser?.id || null,
+  });
+}
+
+function openExpenseHistory(id) {
+  const exp = DB.getExpense(id);
+  if (!exp) return;
+  const body = document.getElementById('modal-history-body');
+  if (!body) return;
+
+  const history = exp.history || [];
+  if (history.length === 0) {
+    body.innerHTML = `<p class="empty-state">Sem histórico registado para esta despesa.</p>
+      <p style="font-size:12px;color:var(--text-secondary);text-align:center">
+        O histórico começa a ser registado a partir de agora em todas as despesas novas e actualizadas.
+      </p>`;
+  } else {
+    const actionLabel = {
+      submitted:  { icon:'📤', label:'Submetida' },
+      resubmitted:{ icon:'🔄', label:'Re-submetida' },
+      approved:   { icon:'✅', label:'Aprovada' },
+      rejected:   { icon:'❌', label:'Rejeitada' },
+      draft_saved:{ icon:'💾', label:'Rascunho guardado' },
+      sent_draft: { icon:'📨', label:'Rascunho enviado' },
+      viewed:     { icon:'👁',  label:'Visualizada' },
+      edited:     { icon:'✏️', label:'Editada' },
+    };
+    body.innerHTML = `<div class="history-timeline">` +
+      [...history].reverse().map(h => {
+        const al = actionLabel[h.action] || { icon:'•', label: h.action };
+        const u = DB.getUser(h.userId);
+        const dt = h.ts ? new Date(h.ts).toLocaleString('pt-PT', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
+        return `<div class="hist-item">
+          <div class="hist-icon">${al.icon}</div>
+          <div class="hist-info">
+            <div class="hist-action">${al.label}</div>
+            ${h.detail ? `<div class="hist-detail">"${h.detail}"</div>` : ''}
+            <div class="hist-meta">${u ? u.name : '—'} · ${dt}</div>
+          </div>
+        </div>`;
+      }).join('') + `</div>`;
+  }
+  openModal('modal-history');
+}
+
+// ══════════════════════════════════════════════
+// ── PDF POR DESPESA ──
+// ══════════════════════════════════════════════
+function downloadExpensePDF(id) {
+  const exp = id ? DB.getExpense(id) : null;
+  if (!exp) return;
+  if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') {
+    printExpense(id); return; // fallback to print
+  }
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+    const W = 210; const m = 15;
+    let y = 15;
+
+    // Header
+    doc.setFillColor(30, 58, 95);
+    doc.rect(0, 0, W, 26, 'F');
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(16); doc.setFont('helvetica','bold');
+    doc.text('SGDC', m, 11);
+    doc.setFontSize(9); doc.setFont('helvetica','normal');
+    doc.text('Sistema de Gestão de Despesas de Campo', m, 17);
+    doc.text(currentCompany?.name || '', W-m, 11, { align:'right' });
+    doc.text(new Date().toLocaleDateString('pt-PT'), W-m, 17, { align:'right' });
+    y = 34;
+
+    // Title
+    doc.setTextColor(30,58,95);
+    doc.setFontSize(13); doc.setFont('helvetica','bold');
+    doc.text(expenseName(exp), m, y); y += 8;
+
+    // Status badge
+    const statusColors = { approved:[16,120,94], pending:[161,98,7], rejected:[185,28,28], draft:[107,114,128] };
+    const sc = statusColors[exp.status] || [107,114,128];
+    doc.setFillColor(...sc);
+    doc.roundedRect(m, y, 40, 7, 2, 2, 'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(8);
+    doc.text(statusLabel(exp.status).replace(/[^\w\sÀ-ÿ]/gu,'').trim(), m+2, y+4.8);
+    y += 12;
+
+    // Details table
+    const user = DB.getUser(exp.userId);
+    const currency = exp.moeda || currentCompany?.currency || 'MZN';
+    const rows = [
+      ['Data', fmtDate(exp.data)],
+      ['Funcionário', user?.name || '—'],
+      ['Tipo', exp.type === 'procurement' ? 'Procurement' : 'Campo'],
+      ['Categoria', typeLabel(exp.expenseType || exp.type)],
+      ['Valor', fmtCurrency(exp.valor||0, currency)],
+      ['Local', exp.local || '—'],
+      ['Projecto', exp.projeto || '—'],
+      ['Pagamento', payMethodLabel(exp.paymentMethod)],
+      ['Departamento', exp.dept || '—'],
+    ];
+    if (exp.comentario) rows.push(['Comentário', exp.comentario]);
+
+    doc.setFontSize(9);
+    rows.forEach((row, i) => {
+      const bg = i%2===0 ? [248,250,252] : [255,255,255];
+      doc.setFillColor(...bg); doc.rect(m, y, W-2*m, 7, 'F');
+      doc.setTextColor(107,114,128); doc.setFont('helvetica','bold');
+      doc.text(row[0], m+2, y+4.8);
+      doc.setTextColor(31,41,55); doc.setFont('helvetica','normal');
+      doc.text(String(row[1]).substring(0,70), m+45, y+4.8);
+      y += 7;
+    });
+
+    // Approval chain
+    if (exp.approvals?.length > 0) {
+      y += 5;
+      doc.setTextColor(30,58,95); doc.setFontSize(10); doc.setFont('helvetica','bold');
+      doc.text('Cadeia de Aprovação', m, y); y += 6;
+      exp.approvals.forEach(a => {
+        const aUser = a.userId ? DB.getUser(a.userId) : null;
+        const st = { approved:'✓ Aprovado', rejected:'✗ Rejeitado', pending:'... Pendente', waiting:'⌛ Aguarda' }[a.status] || a.status;
+        doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(31,41,55);
+        doc.text(`Nível ${a.level} – ${a.label}: ${st}${aUser ? ' por '+aUser.name : ''}${a.comment ? ' ("'+a.comment+'")'  : ''}`, m+3, y);
+        y += 6;
+      });
+    }
+
+    // Footer
+    doc.setFillColor(243,244,246); doc.rect(0,288,W,9,'F');
+    doc.setTextColor(107,114,128); doc.setFontSize(7); doc.setFont('helvetica','normal');
+    doc.text(`SGDC · ${currentCompany?.name||''} · Gerado em ${new Date().toLocaleString('pt-PT')}`, m, 293);
+    doc.text(`ID: ${exp.id}`, W-m, 293, { align:'right' });
+
+    doc.save(`Despesa_${expenseName(exp).replace(/\s+/g,'_')}_${exp.data||'sem-data'}.pdf`);
+    showToast('PDF gerado! 📄', 'success');
+  } catch(err) {
+    console.error(err);
+    printExpense(id); // fallback
+  }
+}
+
+// ══════════════════════════════════════════════
+// ── EMAIL — PREVIEW MODAL ──
+// ══════════════════════════════════════════════
+let _emailPreviewContent = { to:'', subject:'', body:'' };
+
+function sendReportEmail() {
+  if (!currentCompany) return;
+  let list = DB.getExpensesByCompany(currentCompany.id).filter(e => e.status !== 'draft');
+
+  // Apply current filters
+  const fDept = document.getElementById('rep-filter-dept')?.value || '';
+  const fUser = document.getElementById('rep-filter-user')?.value || '';
+  const fTipo = document.getElementById('rep-filter-tipo')?.value || '';
+  list = filterByPeriod(list, reportPeriod);
+  if (fDept) list = list.filter(e => e.dept === fDept);
+  if (fUser) list = list.filter(e => e.userId === fUser);
+  if (fTipo) list = list.filter(e => e.expenseType === fTipo);
+
+  const currency = currentCompany.currency || 'MZN';
+  const approved = list.filter(e => e.status === 'approved');
+  const pending  = list.filter(e => e.status === 'pending');
+  const total    = approved.reduce((s,e) => s+(e.valor||0), 0);
+  const fmt = v => new Intl.NumberFormat('pt-MZ',{minimumFractionDigits:2}).format(v)+' '+currency;
+
+  const cfg = typeof Scheduler !== 'undefined' ? Scheduler.getConfig(currentCompany.id) : {};
+  const recipientsDefault = (cfg?.recipients || []).join(', ');
+
+  const subject = `[SGDC] Relatório de Despesas – ${currentCompany.name} – ${periodLabel(reportPeriod)} – ${new Date().toLocaleDateString('pt-PT')}`;
+
+  const top5 = [...approved].sort((a,b)=>(b.valor||0)-(a.valor||0)).slice(0,5);
+  const body = `SGDC – Relatório de Despesas
+Empresa: ${currentCompany.name}
+Período: ${periodLabel(reportPeriod)}
+Data de geração: ${new Date().toLocaleDateString('pt-PT')}
+
+══════════════════════════════════════
+RESUMO
+══════════════════════════════════════
+Total Aprovado:    ${fmt(total)}
+Nº de Despesas:    ${list.length}
+Aprovadas:         ${approved.length}
+Pendentes:         ${pending.length}
+Rejeitadas:        ${list.filter(e=>e.status==='rejected').length}
+Média por Despesa: ${fmt(list.length > 0 ? total/approved.length : 0)}
+
+══════════════════════════════════════
+TOP 5 DESPESAS APROVADAS
+══════════════════════════════════════
+${top5.map((e,i) => {
+  const u = DB.getUser(e.userId);
+  return `${i+1}. ${expenseName(e)} — ${fmt(e.valor||0)}\n   Data: ${e.data||'—'} · Funcionário: ${u?.name||'—'} · Local: ${e.local||'—'}`;
+}).join('\n\n')}
+
+══════════════════════════════════════
+DESPESAS PENDENTES DE APROVAÇÃO
+══════════════════════════════════════
+${pending.length === 0 ? 'Nenhuma despesa pendente.' :
+  pending.slice(0,10).map(e => {
+    const u = DB.getUser(e.userId);
+    return `• ${expenseName(e)} — ${fmt(e.valor||0)} · ${u?.name||'—'} · ${e.data||'—'}`;
+  }).join('\n')}
+
+──────────────────────────────────────
+Este relatório foi gerado automaticamente pelo SGDC.
+Para ver o relatório completo com gráficos, abra a aplicação SGDC.`;
+
+  _emailPreviewContent = { to: recipientsDefault, subject, body };
+
+  document.getElementById('email-prev-to').value      = recipientsDefault;
+  document.getElementById('email-prev-subject').value = subject;
+  document.getElementById('email-prev-body').value    = body;
+
+  openModal('modal-email-preview');
+}
+
+function copyEmailContent() {
+  const body = document.getElementById('email-prev-body')?.value || '';
+  navigator.clipboard.writeText(body).then(() => {
+    showToast('Conteúdo copiado para a área de transferência! 📋', 'success');
+  }).catch(() => {
+    document.getElementById('email-prev-body').select();
+    document.execCommand('copy');
+    showToast('Copiado! 📋', 'success');
+  });
+}
+
+function openEmailClient() {
+  const to      = document.getElementById('email-prev-to')?.value || '';
+  const subject = document.getElementById('email-prev-subject')?.value || '';
+  const body    = document.getElementById('email-prev-body')?.value || '';
+  const url = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  window.location.href = url;
+  closeModal('modal-email-preview');
+  showToast('A abrir cliente de email… 📧', 'info');
 }
 
 // ── SERVICE WORKER ──
