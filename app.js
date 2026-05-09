@@ -677,23 +677,45 @@ function expenseItemHTML(exp, showUser = false) {
 function renderExpenseList() {
   const statusFilter = document.getElementById('filter-status')?.value || '';
   const typeFilter   = document.getElementById('filter-type')?.value   || '';
+  const userFilter   = document.getElementById('filter-user')?.value   || '';
   const search       = (document.getElementById('filter-search')?.value || '').toLowerCase();
+  const isFunc       = currentUser.role === 'funcionario';
 
-  // "As minhas despesas" — sempre filtrado pelo utilizador actual, independente do role
-  let list = DB.getExpensesByUser(currentUser.id);
+  // Título e dropdown de utilizadores dinâmico
+  const titleEl = document.getElementById('despesas-page-title');
+  const userSel = document.getElementById('filter-user');
+  if (isFunc) {
+    if (titleEl) titleEl.textContent = '📁 As minhas despesas';
+  } else {
+    if (titleEl) titleEl.textContent = '📁 Todas as Despesas';
+    if (userSel) {
+      const currentVal = userSel.value;
+      const users = DB.getUsersByCompany(currentCompany.id).sort((a,b) => a.name.localeCompare(b.name));
+      userSel.innerHTML = '<option value="">Todos os Funcionários</option>' +
+        users.map(u => `<option value="${u.id}" ${u.id===currentVal?'selected':''}>${u.name}</option>`).join('');
+    }
+  }
+
+  // Gestores vêem todas as despesas da empresa; funcionários só as suas
+  let list = isFunc
+    ? DB.getExpensesByUser(currentUser.id)
+    : DB.getExpensesByCompany(currentCompany.id);
+
   if (statusFilter) list = list.filter(e => e.status === statusFilter);
   if (typeFilter)   list = list.filter(e => e.type === typeFilter || e.type === typeFilter + '-pedido');
+  if (!isFunc && userFilter) list = list.filter(e => e.userId === userFilter);
   if (search)       list = list.filter(e =>
     expenseName(e).toLowerCase().includes(search) ||
     (e.local||'').toLowerCase().includes(search) ||
-    (e.projeto||'').toLowerCase().includes(search)
+    (e.projeto||'').toLowerCase().includes(search) ||
+    (DB.getUser(e.userId)?.name || '').toLowerCase().includes(search)
   );
   list.sort((a,b) => (b.submittedAt||b.data||'').localeCompare(a.submittedAt||a.data||''));
 
   const container = document.getElementById('expense-list-container');
   container.innerHTML = list.length === 0
     ? '<p class="empty-state">Nenhuma despesa encontrada.</p>'
-    : `<div class="expense-list">${list.map(e => expenseItemHTML(e)).join('')}</div>`;
+    : `<div class="expense-list">${list.map(e => expenseItemHTML(e, !isFunc)).join('')}</div>`;
 }
 
 // ── EXPENSE DETAIL MODAL ──
@@ -727,7 +749,8 @@ function openExpenseDetail(id) {
     <div class="detail-item"><div class="detail-label">Valor/Pessoa</div><div class="detail-value">${fmtCurrency(exp.valorPessoa||0, currency)}</div></div>
     <div class="detail-item"><div class="detail-label">Tipo Despesa</div><div class="detail-value">${typeLabel(exp.expenseType)}</div></div>
     <div class="detail-item"><div class="detail-label">Tipo Trabalho</div><div class="detail-value">${exp.trabalho||'—'}</div></div>`;
-    if (exp.km) html += `<div class="detail-item"><div class="detail-label">Distância GPS</div><div class="detail-value">${parseFloat(exp.km).toFixed(2)} km</div></div>`;
+    if (exp.km)  html += `<div class="detail-item"><div class="detail-label">GPS</div><div class="detail-value">📍 ${exp.km}</div></div>`;
+    if (exp.gps && !exp.km) html += `<div class="detail-item"><div class="detail-label">GPS</div><div class="detail-value">📍 ${exp.gps}</div></div>`;
   }
   html += `<div class="detail-item"><div class="detail-label">Submetido por</div><div class="detail-value">${user?.name||'—'}</div></div>
     <div class="detail-item"><div class="detail-label">Submetido em</div><div class="detail-value">${exp.submittedAt ? fmtDate(exp.submittedAt) : '(rascunho)'}</div></div>`;
@@ -1462,10 +1485,25 @@ function renderPlaneamento() {
   const isFunc = currentUser.role === 'funcionario';
   // Funcionário vê só os seus planos; gestores vêem todos
   const allPlans = DB.getPlansByCompany(currentCompany.id);
-  const plans = (isFunc
+  let plans = isFunc
     ? allPlans.filter(p => p.createdBy === currentUser.id)
-    : allPlans
-  ).sort((a,b) => (a.inicio||'').localeCompare(b.inicio||''));
+    : allPlans;
+
+  // Aplicar filtros (managers)
+  if (!isFunc) {
+    const fStatus = document.getElementById('plan-filter-status')?.value || '';
+    const fTipo   = document.getElementById('plan-filter-tipo')?.value   || '';
+    const fSearch = (document.getElementById('plan-filter-search')?.value || '').toLowerCase();
+    if (fStatus) plans = plans.filter(p => p.status === fStatus);
+    if (fTipo)   plans = plans.filter(p => p.tipo   === fTipo);
+    if (fSearch) plans = plans.filter(p =>
+      (p.desc||'').toLowerCase().includes(fSearch) ||
+      (p.local||'').toLowerCase().includes(fSearch) ||
+      (p.projeto||'').toLowerCase().includes(fSearch) ||
+      (DB.getUser(p.createdBy)?.name||'').toLowerCase().includes(fSearch)
+    );
+  }
+  plans = plans.sort((a,b) => (a.inicio||'').localeCompare(b.inicio||''));
 
   const planIcons = { campo:'🌍', viagem:'✈️', alojamento:'🏨', formacao:'📚', reuniao:'🤝' };
   const statusCls = { upcoming:'upcoming', active:'active', done:'done' };
@@ -2790,11 +2828,13 @@ function removeChainLevel(idx) {
 // ── UTILIZADORES ──
 function renderUtilizadores() {
   if (!currentCompany) return;
-  const users = DB.getUsersByCompany(currentCompany.id);
+  const users = DB.getUsersByCompany(currentCompany.id).sort((a,b) => a.name.localeCompare(b.name));
   const container = document.getElementById('user-list-container');
   if (!container) return;
   if (users.length === 0) { container.innerHTML = '<p class="empty-state">Nenhum utilizador.</p>'; return; }
-  container.innerHTML = users.map(u => `
+  container.innerHTML = `
+    <div style="margin-bottom:12px;color:var(--text-secondary);font-size:13px">${users.length} utilizador${users.length!==1?'es':''} nesta empresa</div>
+    ${users.map(u => `
     <div class="user-item">
       <div class="user-item-avatar">${u.name.charAt(0).toUpperCase()}</div>
       <div class="user-item-info">
@@ -2802,24 +2842,88 @@ function renderUtilizadores() {
         <div class="user-item-meta">${u.email}</div>
       </div>
       <span class="role-badge ${u.role}">${roleLabel(u.role)}</span>
-    </div>`).join('');
+      ${u.id !== currentUser.id ? `
+      <div style="display:flex;gap:6px;margin-left:8px">
+        <button class="btn btn-sm btn-outline" onclick="editUser('${u.id}')" title="Editar">✏️</button>
+        <button class="btn btn-sm btn-danger-outline" onclick="deleteUser('${u.id}')" title="Remover">🗑️</button>
+      </div>` : '<span style="font-size:11px;color:var(--text-secondary);margin-left:8px">(você)</span>'}
+    </div>`).join('')}`;
 }
-function openUserModal() { openModal('modal-user'); }
+
+function gerarPasswordUtilizador() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#!';
+  let pass = '';
+  for (let i = 0; i < 10; i++) pass += chars[Math.floor(Math.random() * chars.length)];
+  const el = document.getElementById('new-user-pass');
+  if (el) el.value = pass;
+  const hint = document.getElementById('new-user-pass-copy');
+  if (hint) hint.classList.remove('hidden');
+  showToast(`Palavra-passe gerada: ${pass}`, 'info');
+}
+
+function openUserModal() {
+  ['new-user-name','new-user-email'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('new-user-pass').value = '';
+  document.getElementById('new-user-role').value = 'funcionario';
+  document.getElementById('new-user-pass-copy')?.classList.add('hidden');
+  document.getElementById('modal-user-title') && (document.getElementById('modal-user-title').textContent = '👤 Novo Utilizador');
+  openModal('modal-user');
+}
+
+function editUser(id) {
+  const u = DB.getUser(id);
+  if (!u) return;
+  document.getElementById('new-user-name').value  = u.name;
+  document.getElementById('new-user-email').value = u.email;
+  document.getElementById('new-user-pass').value  = '';
+  document.getElementById('new-user-role').value  = u.role;
+  document.getElementById('new-user-pass-copy')?.classList.add('hidden');
+  // store editing ID on modal
+  document.getElementById('modal-user')._editId = id;
+  openModal('modal-user');
+}
+
+function deleteUser(id) {
+  const u = DB.getUser(id);
+  if (!u || !confirm(`Remover o utilizador "${u.name}"? Esta ação não pode ser desfeita.`)) return;
+  const users = DB.getUsers().filter(x => x.id !== id);
+  DB._set(DB.KEYS.USERS, users);
+  renderUtilizadores();
+  showToast('Utilizador removido', 'info');
+}
+
 function createUser() {
   const name  = document.getElementById('new-user-name').value.trim();
   const email = document.getElementById('new-user-email').value.trim();
   const pass  = document.getElementById('new-user-pass').value;
   const role  = document.getElementById('new-user-role').value;
-  if (!name || !email || !pass) { showToast('Preencha todos os campos', 'error'); return; }
-  if (pass.length < 6) { showToast('Palavra-passe: mínimo 6 caracteres', 'error'); return; }
-  if (DB.findUserByEmail(email)) { showToast('Email já registado', 'error'); return; }
-  DB.saveUser({ id: DB.uid(), companyId: currentCompany.id, name, email, password: pass, role });
-  closeModal('modal-user');
-  showToast(`Utilizador ${name} criado! 👤`, 'success');
+  const modal = document.getElementById('modal-user');
+  const editId = modal?._editId || null;
+
+  if (!name || !email) { showToast('Preencha nome e email', 'error'); return; }
+
+  if (editId) {
+    // Editing existing user
+    const u = DB.getUser(editId);
+    if (!u) return;
+    u.name = name; u.email = email; u.role = role;
+    if (pass && pass.length >= 6) u.password = pass;
+    else if (pass && pass.length < 6) { showToast('Palavra-passe: mínimo 6 caracteres', 'error'); return; }
+    DB.saveUser(u);
+    if (modal) modal._editId = null;
+    closeModal('modal-user');
+    showToast(`Utilizador ${name} atualizado! ✓`, 'success');
+  } else {
+    // New user
+    if (!pass) { showToast('Preencha a palavra-passe', 'error'); return; }
+    if (pass.length < 6) { showToast('Palavra-passe: mínimo 6 caracteres', 'error'); return; }
+    const existing = DB.findUserByEmail(email);
+    if (existing) { showToast('Email já registado', 'error'); return; }
+    DB.saveUser({ id: DB.uid(), companyId: currentCompany.id, name, email, password: pass, role });
+    closeModal('modal-user');
+    showToast(`Utilizador ${name} criado! 👤`, 'success');
+  }
   renderUtilizadores();
-  ['new-user-name','new-user-email','new-user-pass'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.value = '';
-  });
 }
 
 // ── PERFIL ──
