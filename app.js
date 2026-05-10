@@ -64,7 +64,7 @@ function showPage(id) {
 
   switch (id) {
     case 'page-dashboard':     renderDashboard();          break;
-    case 'page-despesas':      renderExpenseList();        break;
+    case 'page-despesas':      despesasTab = 'mine'; document.getElementById('tab-desp-mine')?.classList.add('active'); document.getElementById('tab-desp-empresa')?.classList.remove('active'); renderExpenseList(); break;
     case 'page-aprovacoes':    renderAprovacoes();         break;
     case 'page-relatorios':    renderRelatorios();         break;
     case 'page-planeamento':   renderPlaneamento();        break;
@@ -407,9 +407,23 @@ function expenseName(exp) {
 function payMethodLabel(pm) {
   return { cash: '💵 Numerário', mpesa: '📱 M-Pesa', emola: '📱 eMola', mpesk: '📱 mPesk', bank: '🏦 Transferência Bancária' }[pm] || pm || '—';
 }
+function getTeamExpenses(supervisorId) {
+  // Retorna despesas do supervisor + todos os seus membros de equipa
+  const teamIds = DB.getUsersByCompany(currentCompany.id)
+    .filter(u => u.supervisorId === supervisorId)
+    .map(u => u.id);
+  teamIds.push(supervisorId);
+  return DB.getExpensesByCompany(currentCompany.id).filter(e => teamIds.includes(e.userId));
+}
+
+function isSupervisorRole(role) {
+  return role === 'supervisor' || role === 'coordenador';
+}
+
 function getMyExpenses() {
   if (!currentUser || !currentCompany) return [];
   if (currentUser.role === 'funcionario') return DB.getExpensesByUser(currentUser.id);
+  if (isSupervisorRole(currentUser.role)) return getTeamExpenses(currentUser.id);
   return DB.getExpensesByCompany(currentCompany.id);
 }
 function filterByPeriod(expenses, period) {
@@ -465,6 +479,49 @@ function pushNotification(userId, title, body, type = 'info') {
   }
 }
 
+// ── DASHBOARD VIEW (pessoal / empresa) ──
+let dashView = 'mine'; // 'mine' | 'empresa'
+
+function switchDashView(view) {
+  dashView = view;
+  // Actualizar botões
+  document.getElementById('dash-tab-mine')?.classList.toggle('active', view === 'mine');
+  document.getElementById('dash-tab-empresa')?.classList.toggle('active', view === 'empresa');
+  // Mostrar/esconder secções
+  const sectionMine    = document.getElementById('dash-section-mine');
+  const sectionEmpresa = document.getElementById('dash-section-empresa');
+  if (sectionMine)    sectionMine.classList.toggle('hidden', view !== 'mine');
+  if (sectionEmpresa) sectionEmpresa.classList.toggle('hidden', view !== 'empresa');
+}
+
+// Navegação a partir dos cards do dashboard
+function goToDespesasMine() {
+  despesasTab = 'mine';
+  showPage('page-despesas');
+}
+function goToDespesasMineFiltered(status) {
+  despesasTab = 'mine';
+  showPage('page-despesas');
+  setTimeout(() => {
+    const el = document.getElementById('filter-status');
+    if (el) { el.value = status; renderExpenseList(); }
+  }, 100);
+}
+function goToDespesasEmpresa() {
+  despesasTab = 'empresa';
+  showPage('page-despesas');
+  setTimeout(() => { switchDespesasTab('empresa'); }, 50);
+}
+function goToDespesasEmpresaFiltered(status) {
+  despesasTab = 'empresa';
+  showPage('page-despesas');
+  setTimeout(() => {
+    switchDespesasTab('empresa');
+    const el = document.getElementById('filter-status');
+    if (el) { el.value = status; renderExpenseList(); }
+  }, 100);
+}
+
 // ── DASHBOARD PERIOD ──
 let dashPeriod = 'month';
 let dashTrendChart = null;
@@ -513,18 +570,46 @@ function renderDashboard() {
   const trendLbl = document.getElementById('dash-trend-label');
   if (trendLbl) trendLbl.textContent = periodLabel(dashPeriod);
 
-  // ── EMPRESA (apenas gestores/admin) ──
+  // ── EMPRESA (apenas gestores/admin/supervisores) ──
   if (!isFunc) {
-    const allPeriod = filterByPeriod(DB.getExpensesByCompany(currentCompany.id), dashPeriod);
+    const isSup = isSupervisorRole(currentUser.role);
+    const baseExp = isSup ? getTeamExpenses(currentUser.id) : DB.getExpensesByCompany(currentCompany.id);
+    const allPeriod = filterByPeriod(baseExp, dashPeriod);
     const empTotal    = allPeriod.filter(e => e.status !== 'rejected' && e.status !== 'draft').reduce((s,e) => s+(e.valor||0), 0);
     const empApproved = allPeriod.filter(e => e.status === 'approved').length;
     const empPending  = allPeriod.filter(e => e.status === 'pending').length;
-    const allUsers    = DB.getExpensesByCompany(currentCompany.id);
+    const allUsers    = baseExp;
     const empUsers    = new Set(allUsers.map(e => e.userId)).size;
     setEl('stat-emp-total',    fmtCurrency(empTotal, currency));
     setEl('stat-emp-approved', empApproved);
     setEl('stat-emp-pending',  empPending);
     setEl('stat-emp-users',    empUsers);
+    // Adaptar rótulos conforme o papel
+    if (isSup) {
+      const empTotalLbl = document.querySelector('#stats-empresa .stat-card.purple .stat-label');
+      if (empTotalLbl) empTotalLbl.textContent = 'Total da Minha Equipa';
+      const empBtn = document.querySelector('#dash-section-empresa .btn-ghost');
+      if (empBtn) empBtn.textContent = 'Ver despesas da minha equipa →';
+      const empTab = document.getElementById('dash-tab-empresa');
+      const dvtLbl = empTab?.querySelector('.dvt-label');
+      if (dvtLbl) dvtLbl.textContent = 'Visão da Equipa';
+    } else {
+      const empTotalLbl = document.querySelector('#stats-empresa .stat-card.purple .stat-label');
+      if (empTotalLbl) empTotalLbl.textContent = 'Total Empresa';
+      const empBtn = document.querySelector('#dash-section-empresa .btn-ghost');
+      if (empBtn) empBtn.textContent = 'Ver todas as despesas da empresa →';
+      const empTab = document.getElementById('dash-tab-empresa');
+      const dvtLbl = empTab?.querySelector('.dvt-label');
+      if (dvtLbl) dvtLbl.textContent = 'Visão da Empresa';
+    }
+    // Mostrar tabs e aplicar vista activa
+    document.getElementById('dash-view-tabs')?.classList.remove('hidden');
+    switchDashView(dashView);
+  } else {
+    // Funcionários: só secção pessoal, sem tabs
+    document.getElementById('dash-section-mine')?.classList.remove('hidden');
+    document.getElementById('dash-section-empresa')?.classList.add('hidden');
+    document.getElementById('dash-view-tabs')?.classList.add('hidden');
   }
 
   // ── ÚLTIMAS 5 despesas ──
@@ -673,6 +758,20 @@ function expenseItemHTML(exp, showUser = false) {
   </div>`;
 }
 
+// ── TABS DE DESPESAS (admin/gestor) ──
+let despesasTab = 'mine'; // 'mine' | 'empresa'
+
+function switchDespesasTab(tab) {
+  despesasTab = tab;
+  ['mine','empresa'].forEach(t => {
+    document.getElementById(`tab-desp-${t}`)?.classList.toggle('active', t === tab);
+  });
+  // resetar filtro de utilizador ao mudar de tab
+  const userSel = document.getElementById('filter-user');
+  if (userSel) userSel.value = '';
+  renderExpenseList();
+}
+
 // ── EXPENSE LIST ──
 function renderExpenseList() {
   const statusFilter = document.getElementById('filter-status')?.value || '';
@@ -681,29 +780,49 @@ function renderExpenseList() {
   const search       = (document.getElementById('filter-search')?.value || '').toLowerCase();
   const isFunc       = currentUser.role === 'funcionario';
 
-  // Título e dropdown de utilizadores dinâmico
+  // Para gestores/admin, respeitar a tab activa
+  const showingMine = isFunc || despesasTab === 'mine';
+  const showingEmpresa = !isFunc && despesasTab === 'empresa';
+
+  // Título dinâmico
   const titleEl = document.getElementById('despesas-page-title');
+  if (titleEl) {
+    if (showingMine) titleEl.textContent = '📁 As minhas despesas';
+    else if (isSupervisorRole(currentUser.role)) titleEl.textContent = '📁 Despesas da Minha Equipa';
+    else             titleEl.textContent = '📁 Todas as Despesas da Empresa';
+  }
+
+  // Dropdown de utilizadores (só na tab empresa)
   const userSel = document.getElementById('filter-user');
-  if (isFunc) {
-    if (titleEl) titleEl.textContent = '📁 As minhas despesas';
-  } else {
-    if (titleEl) titleEl.textContent = '📁 Todas as Despesas';
-    if (userSel) {
+  const userSelWrap = userSel?.parentElement || userSel;
+  if (userSel) {
+    if (showingEmpresa) {
+      userSel.classList.remove('hidden');
       const currentVal = userSel.value;
-      const users = DB.getUsersByCompany(currentCompany.id).sort((a,b) => a.name.localeCompare(b.name));
-      userSel.innerHTML = '<option value="">Todos os Funcionários</option>' +
-        users.map(u => `<option value="${u.id}" ${u.id===currentVal?'selected':''}>${u.name}</option>`).join('');
+      // Supervisores vêem apenas a sua equipa no dropdown
+      const allUsers = DB.getUsersByCompany(currentCompany.id).sort((a,b) => a.name.localeCompare(b.name));
+      const visibleUsers = isSupervisorRole(currentUser.role)
+        ? allUsers.filter(u => u.supervisorId === currentUser.id || u.id === currentUser.id)
+        : allUsers;
+      const teamLabel = isSupervisorRole(currentUser.role) ? 'Toda a Minha Equipa' : 'Todos os Funcionários';
+      userSel.innerHTML = `<option value="">${teamLabel}</option>` +
+        visibleUsers.map(u => `<option value="${u.id}" ${u.id===currentVal?'selected':''}>${u.name}</option>`).join('');
+    } else {
+      userSel.classList.add('hidden');
+      userSel.value = '';
     }
   }
 
-  // Gestores vêem todas as despesas da empresa; funcionários só as suas
-  let list = isFunc
+  // Escolher conjunto de despesas
+  let list = showingMine
     ? DB.getExpensesByUser(currentUser.id)
-    : DB.getExpensesByCompany(currentCompany.id);
+    : isSupervisorRole(currentUser.role)
+      ? getTeamExpenses(currentUser.id)
+      : DB.getExpensesByCompany(currentCompany.id);
 
   if (statusFilter) list = list.filter(e => e.status === statusFilter);
   if (typeFilter)   list = list.filter(e => e.type === typeFilter || e.type === typeFilter + '-pedido');
-  if (!isFunc && userFilter) list = list.filter(e => e.userId === userFilter);
+  if (showingEmpresa && userFilter) list = list.filter(e => e.userId === userFilter);
   if (search)       list = list.filter(e =>
     expenseName(e).toLowerCase().includes(search) ||
     (e.local||'').toLowerCase().includes(search) ||
@@ -715,7 +834,7 @@ function renderExpenseList() {
   const container = document.getElementById('expense-list-container');
   container.innerHTML = list.length === 0
     ? '<p class="empty-state">Nenhuma despesa encontrada.</p>'
-    : `<div class="expense-list">${list.map(e => expenseItemHTML(e, !isFunc)).join('')}</div>`;
+    : `<div class="expense-list">${list.map(e => expenseItemHTML(e, showingEmpresa)).join('')}</div>`;
 }
 
 // ── EXPENSE DETAIL MODAL ──
@@ -2748,6 +2867,9 @@ function renderConfig() {
 
   // Approval chain
   _renderApprovalChain();
+
+  // Teams per supervisor
+  _renderConfigTeams();
 }
 
 function _renderRecipients(list) {
@@ -2833,29 +2955,204 @@ function removeChainLevel(idx) {
   _renderApprovalChain();
 }
 
+// ── EQUIPAS POR SUPERVISOR (Configurações) ──
+function _renderConfigTeams() {
+  const container = document.getElementById('config-teams-list');
+  if (!container) return;
+  const users = DB.getUsersByCompany(currentCompany.id);
+  const supervisorRoles = ['supervisor','coordenador','gestor','director','financeiro','admin'];
+  const supervisors = users.filter(u => supervisorRoles.includes(u.role)).sort((a,b) => a.name.localeCompare(b.name));
+
+  if (supervisors.length === 0) {
+    container.innerHTML = '<p class="empty-state">Não há supervisores registados.</p>';
+    return;
+  }
+
+  container.innerHTML = supervisors.map(sup => {
+    const equipa = users.filter(u => u.supervisorId === sup.id).sort((a,b) => a.name.localeCompare(b.name));
+    const disponiveis = users.filter(u => u.id !== sup.id && u.supervisorId !== sup.id && !supervisorRoles.includes(u.role)).sort((a,b) => a.name.localeCompare(b.name));
+
+    return `
+    <div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px;background:var(--bg-card)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="avatar" style="width:36px;height:36px;font-size:14px">${sup.name.charAt(0).toUpperCase()}</div>
+          <div>
+            <div style="font-weight:600;font-size:14px">${sup.name}</div>
+            <div style="font-size:12px;color:var(--text-secondary)">${roleLabel(sup.role)}</div>
+          </div>
+        </div>
+        <span style="font-size:12px;color:var(--text-secondary);background:var(--bg-secondary);padding:3px 10px;border-radius:20px">${equipa.length} membro${equipa.length!==1?'s':''}</span>
+      </div>
+      <div id="team-members-${sup.id}" style="margin-bottom:12px">
+        ${equipa.length === 0
+          ? '<p style="font-size:13px;color:var(--text-secondary);font-style:italic;padding:8px 0">Sem membros atribuídos a este supervisor</p>'
+          : equipa.map(m => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg-secondary);border-radius:6px;margin-bottom:6px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div class="avatar" style="width:28px;height:28px;font-size:11px">${m.name.charAt(0).toUpperCase()}</div>
+                <div>
+                  <span style="font-weight:500;font-size:13px">${m.name}</span>
+                  <span style="font-size:11px;color:var(--text-secondary);margin-left:6px">${roleLabel(m.role)}</span>
+                </div>
+              </div>
+              <button class="btn-icon btn-danger-icon" onclick="removeFromTeam('${m.id}','${sup.id}')" title="Remover da equipa" style="font-size:12px">✕</button>
+            </div>`).join('')
+        }
+      </div>
+      ${disponiveis.length > 0 ? `
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+        <select id="add-member-${sup.id}" class="input" style="flex:1;font-size:13px">
+          <option value="">— Seleccionar membro para adicionar —</option>
+          ${disponiveis.map(u => `<option value="${u.id}">${u.name} (${roleLabel(u.role)})</option>`).join('')}
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="addToTeam('${sup.id}')">+ Adicionar</button>
+      </div>` : `<p style="font-size:12px;color:var(--text-secondary);font-style:italic">Todos os membros disponíveis já foram atribuídos</p>`}
+    </div>`;
+  }).join('');
+}
+
+function addToTeam(supId) {
+  const sel = document.getElementById(`add-member-${supId}`);
+  const userId = sel?.value;
+  if (!userId) { showToast('Seleccione um membro para adicionar', 'error'); return; }
+  const user = DB.getUser(userId);
+  if (!user) return;
+  user.supervisorId = supId;
+  DB.saveUser(user);
+  showToast(`${user.name} adicionado à equipa ✓`, 'success');
+  _renderConfigTeams();
+}
+
+function removeFromTeam(userId, supId) {
+  const user = DB.getUser(userId);
+  if (!user) return;
+  user.supervisorId = null;
+  DB.saveUser(user);
+  showToast(`${user.name} removido da equipa`, 'success');
+  _renderConfigTeams();
+}
+
 // ── UTILIZADORES ──
+let userTab = 'lista'; // 'lista' | 'equipas'
+
+function switchUserTab(tab) {
+  userTab = tab;
+  ['lista','equipas'].forEach(t => {
+    document.getElementById(`tab-user-${t}`)?.classList.toggle('active', t === tab);
+  });
+  renderUtilizadores();
+}
+
 function renderUtilizadores() {
   if (!currentCompany) return;
   const users = DB.getUsersByCompany(currentCompany.id).sort((a,b) => a.name.localeCompare(b.name));
   const container = document.getElementById('user-list-container');
   if (!container) return;
   if (users.length === 0) { container.innerHTML = '<p class="empty-state">Nenhum utilizador.</p>'; return; }
-  container.innerHTML = `
-    <div style="margin-bottom:12px;color:var(--text-secondary);font-size:13px">${users.length} utilizador${users.length!==1?'es':''} nesta empresa</div>
-    ${users.map(u => `
-    <div class="user-item">
-      <div class="user-item-avatar">${u.name.charAt(0).toUpperCase()}</div>
-      <div class="user-item-info">
-        <div class="user-item-name">${u.name}</div>
-        <div class="user-item-meta">${u.email}</div>
-      </div>
-      <span class="role-badge ${u.role}">${roleLabel(u.role)}</span>
-      ${u.id !== currentUser.id ? `
-      <div style="display:flex;gap:6px;margin-left:8px">
-        <button class="btn btn-sm btn-outline" onclick="editUser('${u.id}')" title="Editar">✏️</button>
-        <button class="btn btn-sm btn-danger-outline" onclick="deleteUser('${u.id}')" title="Remover">🗑️</button>
-      </div>` : '<span style="font-size:11px;color:var(--text-secondary);margin-left:8px">(você)</span>'}
-    </div>`).join('')}`;
+
+  const userActions = (u) => u.id !== currentUser.id ? `
+    <div style="display:flex;gap:6px;margin-left:8px">
+      <button class="btn btn-sm btn-outline" onclick="editUser('${u.id}')" title="Editar">✏️</button>
+      <button class="btn btn-sm btn-danger-outline" onclick="deleteUser('${u.id}')" title="Remover">🗑️</button>
+    </div>` : '<span style="font-size:11px;color:var(--text-secondary);margin-left:8px">(você)</span>';
+
+  if (userTab === 'equipas') {
+    // ── Vista de equipas agrupadas por supervisor ──
+    const supervisorRoles = ['supervisor','coordenador','gestor','director','financeiro','admin'];
+    const supervisors = users.filter(u => supervisorRoles.includes(u.role));
+    const membros = users.filter(u => !supervisorRoles.includes(u.role));
+
+    let html = `<div style="margin-bottom:16px;color:var(--text-secondary);font-size:13px">${users.length} utilizador${users.length!==1?'es':''} · ${supervisors.length} supervisor${supervisors.length!==1?'es':''}</div>`;
+
+    supervisors.forEach(sup => {
+      const equipa = users.filter(u => u.supervisorId === sup.id);
+      html += `
+      <div class="team-group">
+        <div class="team-supervisor-row">
+          <div class="user-item-avatar sup-avatar">${sup.name.charAt(0).toUpperCase()}</div>
+          <div class="user-item-info">
+            <div class="user-item-name">${sup.name}</div>
+            <div class="user-item-meta">${sup.email}</div>
+          </div>
+          <span class="role-badge ${sup.role}">${roleLabel(sup.role)}</span>
+          ${userActions(sup)}
+        </div>
+        ${equipa.length > 0 ? `
+        <div class="team-members">
+          ${equipa.map(m => `
+          <div class="user-item team-member-item">
+            <div style="width:18px;color:var(--text-secondary);font-size:14px">↳</div>
+            <div class="user-item-avatar" style="width:32px;height:32px;font-size:13px">${m.name.charAt(0).toUpperCase()}</div>
+            <div class="user-item-info">
+              <div class="user-item-name">${m.name}</div>
+              <div class="user-item-meta">${m.email}</div>
+            </div>
+            <span class="role-badge ${m.role}">${roleLabel(m.role)}</span>
+            ${userActions(m)}
+          </div>`).join('')}
+        </div>` : '<div class="team-empty">Sem membros atribuídos a este supervisor</div>'}
+      </div>`;
+    });
+
+    // Mostrar membros sem supervisor
+    const semSup = membros.filter(u => !u.supervisorId || !users.find(s => s.id === u.supervisorId));
+    if (semSup.length > 0) {
+      html += `
+      <div class="team-group" style="margin-top:16px">
+        <div style="font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Sem Supervisor</div>
+        ${semSup.map(u => `
+        <div class="user-item">
+          <div class="user-item-avatar">${u.name.charAt(0).toUpperCase()}</div>
+          <div class="user-item-info">
+            <div class="user-item-name">${u.name}</div>
+            <div class="user-item-meta">${u.email}</div>
+          </div>
+          <span class="role-badge ${u.role}">${roleLabel(u.role)}</span>
+          ${userActions(u)}
+        </div>`).join('')}
+      </div>`;
+    }
+    container.innerHTML = html;
+
+  } else {
+    // ── Vista de lista normal ──
+    container.innerHTML = `
+      <div style="margin-bottom:12px;color:var(--text-secondary);font-size:13px">${users.length} utilizador${users.length!==1?'es':''} nesta empresa</div>
+      ${users.map(u => {
+        const supUser = u.supervisorId ? users.find(s => s.id === u.supervisorId) : null;
+        return `
+        <div class="user-item">
+          <div class="user-item-avatar">${u.name.charAt(0).toUpperCase()}</div>
+          <div class="user-item-info">
+            <div class="user-item-name">${u.name}</div>
+            <div class="user-item-meta">${u.email}${supUser ? ` · Supervisor: ${supUser.name}` : ''}</div>
+          </div>
+          <span class="role-badge ${u.role}">${roleLabel(u.role)}</span>
+          ${userActions(u)}
+        </div>`;
+      }).join('')}`;
+  }
+}
+
+function _populateSupervisorDropdown(selectedId) {
+  const sel = document.getElementById('new-user-supervisor');
+  if (!sel || !currentCompany) return;
+  const supervisorRoles = ['supervisor','coordenador','gestor','director','financeiro','admin'];
+  const supervisors = DB.getUsersByCompany(currentCompany.id)
+    .filter(u => supervisorRoles.includes(u.role))
+    .sort((a,b) => a.name.localeCompare(b.name));
+  sel.innerHTML = '<option value="">— Sem supervisor atribuído —</option>' +
+    supervisors.map(s => `<option value="${s.id}" ${s.id === selectedId ? 'selected' : ''}>${s.name} (${roleLabel(s.role)})</option>`).join('');
+}
+
+function onUserRoleChange() {
+  const role = document.getElementById('new-user-role')?.value;
+  // Para admin/director/gestor/financeiro o campo supervisor é opcional mas visível
+  // Apenas escondemos quando não faz sentido (ex: o próprio admin não precisa de supervisor visível)
+  const supGroup = document.getElementById('user-supervisor-group');
+  if (supGroup) supGroup.classList.toggle('hidden', role === 'admin');
+  _populateSupervisorDropdown('');
 }
 
 function gerarPasswordUtilizador() {
@@ -2875,6 +3172,10 @@ function openUserModal() {
   document.getElementById('new-user-role').value = 'funcionario';
   document.getElementById('new-user-pass-copy')?.classList.add('hidden');
   document.getElementById('modal-user-title') && (document.getElementById('modal-user-title').textContent = '👤 Novo Utilizador');
+  // Reset supervisor
+  document.getElementById('user-supervisor-group')?.classList.remove('hidden');
+  _populateSupervisorDropdown('');
+  document.getElementById('modal-user')._editId = null;
   openModal('modal-user');
 }
 
@@ -2886,6 +3187,10 @@ function editUser(id) {
   document.getElementById('new-user-pass').value  = '';
   document.getElementById('new-user-role').value  = u.role;
   document.getElementById('new-user-pass-copy')?.classList.add('hidden');
+  // Supervisor
+  const supGroup = document.getElementById('user-supervisor-group');
+  if (supGroup) supGroup.classList.toggle('hidden', u.role === 'admin');
+  _populateSupervisorDropdown(u.supervisorId || '');
   // store editing ID on modal
   document.getElementById('modal-user')._editId = id;
   openModal('modal-user');
@@ -2901,12 +3206,13 @@ function deleteUser(id) {
 }
 
 function createUser() {
-  const name  = document.getElementById('new-user-name').value.trim();
-  const email = document.getElementById('new-user-email').value.trim();
-  const pass  = document.getElementById('new-user-pass').value;
-  const role  = document.getElementById('new-user-role').value;
-  const modal = document.getElementById('modal-user');
-  const editId = modal?._editId || null;
+  const name       = document.getElementById('new-user-name').value.trim();
+  const email      = document.getElementById('new-user-email').value.trim();
+  const pass       = document.getElementById('new-user-pass').value;
+  const role       = document.getElementById('new-user-role').value;
+  const supervisorId = document.getElementById('new-user-supervisor')?.value || '';
+  const modal      = document.getElementById('modal-user');
+  const editId     = modal?._editId || null;
 
   if (!name || !email) { showToast('Preencha nome e email', 'error'); return; }
 
@@ -2915,6 +3221,7 @@ function createUser() {
     const u = DB.getUser(editId);
     if (!u) return;
     u.name = name; u.email = email; u.role = role;
+    u.supervisorId = supervisorId || null;
     if (pass && pass.length >= 6) u.password = pass;
     else if (pass && pass.length < 6) { showToast('Palavra-passe: mínimo 6 caracteres', 'error'); return; }
     DB.saveUser(u);
@@ -2927,7 +3234,7 @@ function createUser() {
     if (pass.length < 6) { showToast('Palavra-passe: mínimo 6 caracteres', 'error'); return; }
     const existing = DB.findUserByEmail(email);
     if (existing) { showToast('Email já registado', 'error'); return; }
-    DB.saveUser({ id: DB.uid(), companyId: currentCompany.id, name, email, password: pass, role });
+    DB.saveUser({ id: DB.uid(), companyId: currentCompany.id, name, email, password: pass, role, supervisorId: supervisorId || null });
     closeModal('modal-user');
     showToast(`Utilizador ${name} criado! 👤`, 'success');
   }

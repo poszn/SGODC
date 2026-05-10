@@ -331,69 +331,89 @@
         <button class="period-btn"        id="dash-period-ano"    onclick="setDashPeriod('year',this)">Este Ano</button>
       </div>
 
-      <!-- Secção pessoal (todos vêem) -->
-      <div class="dash-section-label">As minhas despesas</div>
-      <div class="stats-grid">
-        <div class="stat-card blue" onclick="showPage('page-despesas')" style="cursor:pointer" title="Ver despesas">
-          <div class="stat-icon">💰</div>
-          <div class="stat-info">
-            <div class="stat-label" id="stat-total-label">Total do Período</div>
-            <div class="stat-value" id="stat-total">0 MZN</div>
+      <!-- Tabs de vista: Pessoal | Empresa (só para managers/admin) -->
+      <div class="dash-view-tabs manager-only hidden" id="dash-view-tabs">
+        <button class="dash-view-tab active" id="dash-tab-mine" onclick="switchDashView('mine')">
+          <span class="dvt-icon">👤</span>
+          <span class="dvt-label">Minhas Despesas</span>
+        </button>
+        <button class="dash-view-tab" id="dash-tab-empresa" onclick="switchDashView('empresa')">
+          <span class="dvt-icon">🏢</span>
+          <span class="dvt-label">Visão da Empresa</span>
+        </button>
+      </div>
+
+      <!-- Secção pessoal -->
+      <div id="dash-section-mine">
+        <div class="stats-grid">
+          <div class="stat-card blue" onclick="goToDespesasMine()" style="cursor:pointer" title="Ver as minhas despesas">
+            <div class="stat-icon">💰</div>
+            <div class="stat-info">
+              <div class="stat-label" id="stat-total-label">Total do Período</div>
+              <div class="stat-value" id="stat-total">0 MZN</div>
+            </div>
+          </div>
+          <div class="stat-card green" onclick="goToDespesasMineFiltered('approved')" style="cursor:pointer" title="Ver aprovadas">
+            <div class="stat-icon">✅</div>
+            <div class="stat-info">
+              <div class="stat-label">Aprovadas</div>
+              <div class="stat-value" id="stat-approved">0</div>
+            </div>
+          </div>
+          <div class="stat-card amber" onclick="goToDespesasMineFiltered('pending')" style="cursor:pointer" title="Ver pendentes">
+            <div class="stat-icon">⏳</div>
+            <div class="stat-info">
+              <div class="stat-label">Pendentes</div>
+              <div class="stat-value" id="stat-pending">0</div>
+            </div>
+          </div>
+          <div class="stat-card red" onclick="goToDespesasMineFiltered('rejected')" style="cursor:pointer" title="Ver rejeitadas">
+            <div class="stat-icon">❌</div>
+            <div class="stat-info">
+              <div class="stat-label">Rejeitadas</div>
+              <div class="stat-value" id="stat-rejected">0</div>
+            </div>
           </div>
         </div>
-        <div class="stat-card green" onclick="showPageFiltered('approved')" style="cursor:pointer" title="Ver aprovadas">
-          <div class="stat-icon">✅</div>
-          <div class="stat-info">
-            <div class="stat-label">Aprovadas</div>
-            <div class="stat-value" id="stat-approved">0</div>
-          </div>
-        </div>
-        <div class="stat-card amber" onclick="showPageFiltered('pending')" style="cursor:pointer" title="Ver pendentes">
-          <div class="stat-icon">⏳</div>
-          <div class="stat-info">
-            <div class="stat-label">Pendentes</div>
-            <div class="stat-value" id="stat-pending">0</div>
-          </div>
-        </div>
-        <div class="stat-card red" onclick="showPageFiltered('rejected')" style="cursor:pointer" title="Ver rejeitadas">
-          <div class="stat-icon">❌</div>
-          <div class="stat-info">
-            <div class="stat-label">Rejeitadas</div>
-            <div class="stat-value" id="stat-rejected">0</div>
-          </div>
+        <div style="text-align:right;margin-top:4px">
+          <button class="btn btn-ghost btn-sm" onclick="goToDespesasMine()">Ver todas as minhas despesas →</button>
         </div>
       </div>
 
       <!-- Secção empresa (gestores/admin vêem) -->
-      <div class="dash-section-label manager-only hidden">Visão geral da empresa</div>
-      <div class="stats-grid manager-only hidden" id="stats-empresa">
-        <div class="stat-card purple">
-          <div class="stat-icon">🏢</div>
-          <div class="stat-info">
-            <div class="stat-label">Total Empresa</div>
-            <div class="stat-value" id="stat-emp-total">0 MZN</div>
+      <div id="dash-section-empresa" class="manager-only hidden">
+        <div class="stats-grid" id="stats-empresa">
+          <div class="stat-card purple" onclick="goToDespesasEmpresa()" style="cursor:pointer" title="Ver todas as despesas">
+            <div class="stat-icon">🏢</div>
+            <div class="stat-info">
+              <div class="stat-label">Total Empresa</div>
+              <div class="stat-value" id="stat-emp-total">0 MZN</div>
+            </div>
+          </div>
+          <div class="stat-card green" onclick="goToDespesasEmpresaFiltered('approved')" style="cursor:pointer" title="Ver aprovadas da empresa">
+            <div class="stat-icon">✅</div>
+            <div class="stat-info">
+              <div class="stat-label">Aprovadas</div>
+              <div class="stat-value" id="stat-emp-approved">0</div>
+            </div>
+          </div>
+          <div class="stat-card amber" onclick="goToDespesasEmpresaFiltered('pending')" style="cursor:pointer" title="Ver pendentes da empresa">
+            <div class="stat-icon">⏳</div>
+            <div class="stat-info">
+              <div class="stat-label">Aguardam Aprovação</div>
+              <div class="stat-value" id="stat-emp-pending">0</div>
+            </div>
+          </div>
+          <div class="stat-card blue">
+            <div class="stat-icon">👥</div>
+            <div class="stat-info">
+              <div class="stat-label">Utilizadores Activos</div>
+              <div class="stat-value" id="stat-emp-users">0</div>
+            </div>
           </div>
         </div>
-        <div class="stat-card green">
-          <div class="stat-icon">✅</div>
-          <div class="stat-info">
-            <div class="stat-label">Aprovadas</div>
-            <div class="stat-value" id="stat-emp-approved">0</div>
-          </div>
-        </div>
-        <div class="stat-card amber">
-          <div class="stat-icon">⏳</div>
-          <div class="stat-info">
-            <div class="stat-label">Aguardam Aprovação</div>
-            <div class="stat-value" id="stat-emp-pending">0</div>
-          </div>
-        </div>
-        <div class="stat-card blue">
-          <div class="stat-icon">👥</div>
-          <div class="stat-info">
-            <div class="stat-label">Utilizadores Activos</div>
-            <div class="stat-value" id="stat-emp-users">0</div>
-          </div>
+        <div style="text-align:right;margin-top:4px">
+          <button class="btn btn-ghost btn-sm" onclick="goToDespesasEmpresa()">Ver todas as despesas da empresa →</button>
         </div>
       </div>
 
@@ -1079,6 +1099,11 @@
       <div class="page-header">
         <h2 id="despesas-page-title">📁 As minhas despesas</h2>
       </div>
+      <!-- Tabs para gestores/admin: Minhas Despesas | Toda a Empresa -->
+      <div class="page-tabs manager-only hidden" id="despesas-tabs" style="margin-bottom:12px">
+        <button class="page-tab active" id="tab-desp-mine" onclick="switchDespesasTab('mine')">👤 Minhas Despesas</button>
+        <button class="page-tab" id="tab-desp-empresa" onclick="switchDespesasTab('empresa')">🏢 Toda a Empresa</button>
+      </div>
       <div class="filters-bar">
         <select id="filter-status" onchange="renderExpenseList()">
           <option value="">Todos os estados</option>
@@ -1472,6 +1497,11 @@
         <h2>👥 Utilizadores</h2>
         <button class="btn btn-primary btn-sm" onclick="openUserModal()">+ Novo Utilizador</button>
       </div>
+      <!-- Tabs: Lista | Estrutura de Equipas -->
+      <div class="page-tabs" style="margin-bottom:16px">
+        <button class="page-tab active" id="tab-user-lista" onclick="switchUserTab('lista')">📋 Lista</button>
+        <button class="page-tab" id="tab-user-equipas" onclick="switchUserTab('equipas')">🏗️ Estrutura de Equipas</button>
+      </div>
       <div id="user-list-container">
         <p class="empty-state">Nenhum utilizador encontrado.</p>
       </div>
@@ -1492,6 +1522,17 @@
             <button class="btn btn-sm btn-outline" onclick="addChainLevel()">+ Adicionar Nível</button>
           </div>
           <div id="chain-list"></div>
+        </div>
+
+        <!-- Teams per Supervisor -->
+        <div class="card config-section">
+          <div class="card-header">
+            <h3>👥 Equipas por Supervisor</h3>
+          </div>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">
+            Defina quem trabalha com cada supervisor. As despesas, pedidos e planos dos membros ficam visíveis para o seu supervisor.
+          </p>
+          <div id="config-teams-list"></div>
         </div>
 
         <!-- Scheduled Reports -->
@@ -1759,7 +1800,7 @@
       </div>
       <div class="form-group">
         <label>Função *</label>
-        <select id="new-user-role">
+        <select id="new-user-role" onchange="onUserRoleChange()">
           <option value="funcionario">👤 Funcionário</option>
           <option value="supervisor">👥 Supervisor</option>
           <option value="coordenador">📋 Coordenador</option>
@@ -1768,6 +1809,16 @@
           <option value="financeiro">💰 Financeiro</option>
           <option value="admin">⚙️ Administrador</option>
         </select>
+      </div>
+      <!-- Alocação de Supervisor — aparece quando o role não é admin/director/gestor/financeiro -->
+      <div id="user-supervisor-group" class="form-group">
+        <label>Reporta a (Supervisor)</label>
+        <select id="new-user-supervisor">
+          <option value="">— Sem supervisor atribuído —</option>
+        </select>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">
+          Define a quem este utilizador reporta na cadeia de aprovação.
+        </div>
       </div>
     </div>
     <div class="modal-actions">
