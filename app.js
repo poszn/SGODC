@@ -612,15 +612,27 @@ function renderDashboard() {
     document.getElementById('dash-view-tabs')?.classList.add('hidden');
   }
 
-  // ── ÚLTIMAS 5 despesas ──
-  const recent = [...myAllExp]
+  // ── Últimas despesas pessoais (secção Mine – compacto, 3 items) ──
+  const recentMine = [...myAllExp]
+    .sort((a,b) => (b.submittedAt||b.data||'').localeCompare(a.submittedAt||a.data||''))
+    .slice(0, 3);
+  const containerMine = document.getElementById('dash-recent-mine');
+  if (containerMine) {
+    containerMine.innerHTML = recentMine.length === 0
+      ? '<p class="empty-state">Nenhuma despesa registada ainda.</p>'
+      : recentMine.map(e => expenseItemHTML(e, false)).join('');
+  }
+
+  // ── Últimas 5 despesas da empresa (secção Empresa) ──
+  const allCompExp = isFunc ? myAllExp : DB.getExpensesByCompany(currentCompany.id);
+  const recent = [...allCompExp]
     .sort((a,b) => (b.submittedAt||b.data||'').localeCompare(a.submittedAt||a.data||''))
     .slice(0, 5);
   const container = document.getElementById('dash-recent-list');
   if (container) {
     container.innerHTML = recent.length === 0
       ? '<p class="empty-state">Nenhuma despesa registada ainda.</p>'
-      : recent.map(e => expenseItemHTML(e, false)).join('');
+      : recent.map(e => expenseItemHTML(e, !isFunc)).join('');
   }
 
   // ── GRÁFICO DONUT — Por Categoria ──

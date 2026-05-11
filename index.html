@@ -335,15 +335,21 @@
       <div class="dash-view-tabs manager-only hidden" id="dash-view-tabs">
         <button class="dash-view-tab active" id="dash-tab-mine" onclick="switchDashView('mine')">
           <span class="dvt-icon">👤</span>
-          <span class="dvt-label">Minhas Despesas</span>
+          <div class="dvt-content">
+            <span class="dvt-label">Minhas Despesas</span>
+            <span class="dvt-desc">Resumo pessoal</span>
+          </div>
         </button>
         <button class="dash-view-tab" id="dash-tab-empresa" onclick="switchDashView('empresa')">
           <span class="dvt-icon">🏢</span>
-          <span class="dvt-label">Visão da Empresa</span>
+          <div class="dvt-content">
+            <span class="dvt-label">Visão da Empresa</span>
+            <span class="dvt-desc">Gestão completa</span>
+          </div>
         </button>
       </div>
 
-      <!-- Secção pessoal -->
+      <!-- ══ SECÇÃO PESSOAL (simples) ══ -->
       <div id="dash-section-mine">
         <div class="stats-grid">
           <div class="stat-card blue" onclick="goToDespesasMine()" style="cursor:pointer" title="Ver as minhas despesas">
@@ -375,13 +381,22 @@
             </div>
           </div>
         </div>
-        <div style="text-align:right;margin-top:4px">
-          <button class="btn btn-ghost btn-sm" onclick="goToDespesasMine()">Ver todas as minhas despesas →</button>
+        <!-- Últimas despesas pessoais (compacto) -->
+        <div class="card" style="margin-top:16px">
+          <div class="card-header">
+            <h3>Últimas Despesas</h3>
+            <button class="btn btn-sm btn-ghost" onclick="goToDespesasMine()">Ver todas →</button>
+          </div>
+          <div id="dash-recent-mine" class="expense-list">
+            <p class="empty-state">Nenhuma despesa registada ainda.</p>
+          </div>
         </div>
       </div>
 
-      <!-- Secção empresa (gestores/admin vêem) -->
+      <!-- ══ SECÇÃO EMPRESA (completa, gestores/admin) ══ -->
       <div id="dash-section-empresa" class="manager-only hidden">
+
+        <!-- Stats da empresa -->
         <div class="stats-grid" id="stats-empresa">
           <div class="stat-card purple" onclick="goToDespesasEmpresa()" style="cursor:pointer" title="Ver todas as despesas">
             <div class="stat-icon">🏢</div>
@@ -415,52 +430,75 @@
         <div style="text-align:right;margin-top:4px">
           <button class="btn btn-ghost btn-sm" onclick="goToDespesasEmpresa()">Ver todas as despesas da empresa →</button>
         </div>
-      </div>
 
-      <!-- Acções rápidas -->
-      <div class="quick-actions">
-        <h3>Acções Rápidas</h3>
-        <div class="quick-grid">
-          <button class="quick-btn" onclick="showPage('page-campo')">
-            <span class="quick-icon">🌍</span><span>Trabalho de Campo</span>
-          </button>
-          <button class="quick-btn" onclick="showPage('page-planeamento')">
-            <span class="quick-icon">📅</span><span>Planeamento</span>
-          </button>
-          <button class="quick-btn" onclick="setRelPeriod('month')">
-            <span class="quick-icon">📊</span><span>Relatório Mensal</span>
-          </button>
-          <button class="quick-btn" onclick="showPage('page-tendencias')">
-            <span class="quick-icon">📉</span><span>Tendências</span>
-          </button>
+        <!-- Acções rápidas -->
+        <div class="quick-actions">
+          <h3>Acções Rápidas</h3>
+          <div class="quick-grid">
+            <button class="quick-btn" onclick="showPage('page-campo')">
+              <span class="quick-icon">🌍</span><span>Trabalho de Campo</span>
+            </button>
+            <button class="quick-btn" onclick="showPage('page-planeamento')">
+              <span class="quick-icon">📅</span><span>Planeamento</span>
+            </button>
+            <button class="quick-btn" onclick="setRelPeriod('month')">
+              <span class="quick-icon">📊</span><span>Relatório Mensal</span>
+            </button>
+            <button class="quick-btn" onclick="showPage('page-tendencias')">
+              <span class="quick-icon">📉</span><span>Tendências</span>
+            </button>
+          </div>
         </div>
-      </div>
 
-      <!-- Gráficos lado a lado -->
-      <div class="charts-grid">
+        <!-- Gráficos -->
+        <div class="charts-grid">
+          <div class="card">
+            <div class="card-header">
+              <h3>Tendência de Gastos</h3>
+              <span class="card-sub" id="dash-trend-label">Este Mês</span>
+            </div>
+            <div class="chart-wrap-wide"><canvas id="dash-trend-chart"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Por Categoria</h3></div>
+            <div class="chart-wrap"><canvas id="dash-chart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Atalhos de Relatórios -->
         <div class="card">
           <div class="card-header">
-            <h3>Tendência de Gastos</h3>
-            <span class="card-sub" id="dash-trend-label">Este Mês</span>
+            <h3>📋 Relatórios</h3>
+            <button class="btn btn-sm btn-ghost" onclick="showPage('page-relatorios')">Ver todos →</button>
           </div>
-          <div class="chart-wrap-wide"><canvas id="dash-trend-chart"></canvas></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;padding:4px 0">
+            <button class="quick-btn" onclick="setRelPeriod('day')" style="background:var(--bg-secondary)">
+              <span class="quick-icon">📅</span><span>Diário</span>
+            </button>
+            <button class="quick-btn" onclick="setRelPeriod('week')" style="background:var(--bg-secondary)">
+              <span class="quick-icon">🗓</span><span>Semanal</span>
+            </button>
+            <button class="quick-btn" onclick="setRelPeriod('month')" style="background:var(--bg-secondary)">
+              <span class="quick-icon">📊</span><span>Mensal</span>
+            </button>
+            <button class="quick-btn" onclick="setRelPeriod('year')" style="background:var(--bg-secondary)">
+              <span class="quick-icon">📈</span><span>Anual</span>
+            </button>
+          </div>
         </div>
-        <div class="card">
-          <div class="card-header"><h3>Por Categoria</h3></div>
-          <div class="chart-wrap"><canvas id="dash-chart"></canvas></div>
-        </div>
-      </div>
 
-      <!-- Últimas despesas -->
-      <div class="card">
-        <div class="card-header">
-          <h3>Últimas Despesas</h3>
-          <button class="btn btn-sm btn-ghost" onclick="showPage('page-despesas')">Ver todas →</button>
+        <!-- Últimas despesas (completo) -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Últimas Despesas da Empresa</h3>
+            <button class="btn btn-sm btn-ghost" onclick="goToDespesasEmpresa()">Ver todas →</button>
+          </div>
+          <div id="dash-recent-list" class="expense-list">
+            <p class="empty-state">Nenhuma despesa registada ainda.</p>
+          </div>
         </div>
-        <div id="dash-recent-list" class="expense-list">
-          <p class="empty-state">Nenhuma despesa registada ainda.</p>
-        </div>
-      </div>
+
+      </div><!-- /dash-section-empresa -->
     </div>
 
     <!-- ── PROCUREMENT ── -->
