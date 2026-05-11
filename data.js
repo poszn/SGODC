@@ -45,6 +45,21 @@ const DB = {
     this._set(this.KEYS.USERS, list);
     return u;
   },
+  deleteUser(id) {
+    // Remove utilizador
+    this._set(this.KEYS.USERS, this.getUsers().filter(u => u.id !== id));
+    // Remover despesas do utilizador
+    this._set(this.KEYS.EXPENSES, this.getExpenses().filter(e => e.userId !== id));
+    // Remover planos criados pelo utilizador
+    this._set(this.KEYS.PLANS, this.getPlans().filter(p => p.createdBy !== id));
+    // Remover adiantamentos do utilizador
+    this._set(this.KEYS.ADVANCES, this.getAdvances().filter(a => a.requestedBy !== id));
+    // Remover notificações do utilizador
+    this._set(this.KEYS.NOTIFICATIONS, this.getNotifications().filter(n => n.userId !== id));
+    // Desvincular supervisorId de outros utilizadores
+    const users = this.getUsers().map(u => u.supervisorId === id ? { ...u, supervisorId: null } : u);
+    this._set(this.KEYS.USERS, users);
+  },
 
   // ── SESSION ──
   getSession()       { return this._getObj(this.KEYS.SESSION); },
@@ -74,6 +89,9 @@ const DB = {
     if (idx >= 0) list[idx] = p; else list.push(p);
     this._set(this.KEYS.PLANS, list);
     return p;
+  },
+  deletePlan(id) {
+    this._set(this.KEYS.PLANS, this.getPlans().filter(p => p.id !== id));
   },
 
   // ── ADVANCES ──

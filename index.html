@@ -167,6 +167,8 @@
       <button class="topbar-notif" onclick="showPage('page-notificacoes')" id="notif-btn" title="Notificações">
         🔔 <span id="notif-count" class="badge hidden">0</span>
       </button>
+      <!-- Dark mode toggle -->
+      <button class="topbar-notif" id="dark-mode-btn" onclick="toggleDarkMode()" title="Modo escuro/claro">🌙</button>
       <!-- Settings shortcut -->
       <button class="topbar-notif admin-only hidden" onclick="showPage('page-config')" title="Configurações">⚙️</button>
       <!-- User info (desktop only) -->
@@ -181,6 +183,7 @@
         <hr/>
         <button onclick="showPage('page-perfil')">⚙️ Perfil</button>
         <button onclick="showPage('page-config')" class="admin-only hidden">🔧 Configurações</button>
+        <button onclick="toggleDarkMode()">🌙 Modo escuro</button>
         <button onclick="doLogout()">🚪 Sair</button>
       </div>
     </div>
@@ -1611,6 +1614,23 @@
           </div>
         </div>
 
+        <!-- Backup & Restore -->
+        <div class="card config-section">
+          <div class="card-header">
+            <h3>💾 Cópia de Segurança</h3>
+          </div>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">
+            Exporte todos os dados para um ficheiro JSON. Use para backup ou migrar para outro dispositivo.
+          </p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn btn-outline btn-sm" onclick="exportBackup()">📥 Exportar dados</button>
+            <label class="btn btn-outline btn-sm" style="cursor:pointer;margin:0">
+              📤 Importar dados
+              <input type="file" accept=".json" style="display:none" onchange="importBackup(this)"/>
+            </label>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -2011,5 +2031,18 @@
   };
 </script>
 <script src="app.js"></script>
+
+<!-- ── MODAL DE CONFIRMAÇÃO PERSONALIZADO ── -->
+<div id="modal-confirm" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('modal-confirm')">
+  <div class="modal" style="max-width:380px;text-align:center;padding:32px 28px">
+    <div style="font-size:44px;margin-bottom:12px;line-height:1" id="confirm-icon">⚠️</div>
+    <h3 id="confirm-title" style="margin-bottom:8px;font-size:17px">Confirmar acção</h3>
+    <p id="confirm-msg" style="color:var(--text-secondary);font-size:14px;margin-bottom:24px;line-height:1.5">Tem a certeza?</p>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button class="btn btn-outline" onclick="closeModal('modal-confirm')" style="flex:1">Cancelar</button>
+      <button class="btn btn-danger" id="confirm-ok-btn" onclick="confirmOk()" style="flex:1">Confirmar</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

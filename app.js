@@ -6,6 +6,64 @@
 // ── GLOBAL STATE ──
 let currentUser    = null;
 let currentCompany = null;
+
+// ── SEGURANÇA: sanitização HTML ──
+function escHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
+}
+
+// ── SEGURANÇA: hash SHA-256 (async, browser nativo) ──
+async function hashPassword(pass) {
+  try {
+    const enc = new TextEncoder().encode(pass);
+    const buf = await crypto.subtle.digest('SHA-256', enc);
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+  } catch { return pass; } // fallback se crypto não disponível
+}
+function isHashed(s) { return /^[a-f0-9]{64}$/i.test(s); }
+
+// ── DARK MODE ──
+function initDarkMode() {
+  const dark = localStorage.getItem('sgdc_dark') === '1';
+  document.body.classList.toggle('dark', dark);
+  const btn = document.getElementById('dark-mode-btn');
+  if (btn) btn.textContent = dark ? '☀️' : '🌙';
+}
+function toggleDarkMode() {
+  const isDark = document.body.classList.toggle('dark');
+  localStorage.setItem('sgdc_dark', isDark ? '1' : '0');
+  const btn = document.getElementById('dark-mode-btn');
+  if (btn) btn.textContent = isDark ? '☀️' : '🌙';
+}
+
+// ── MODAL DE CONFIRMAÇÃO PERSONALIZADO ──
+let _confirmCallback = null;
+function showConfirm(msg, callback, opts = {}) {
+  _confirmCallback = callback;
+  const title = opts.title || 'Confirmar acção';
+  const icon  = opts.icon  || '⚠️';
+  const btnTxt= opts.btn   || 'Confirmar';
+  const btnCls= opts.danger !== false ? 'btn-danger' : 'btn-primary';
+  document.getElementById('confirm-icon').textContent  = icon;
+  document.getElementById('confirm-title').textContent = title;
+  document.getElementById('confirm-msg').textContent   = msg;
+  const btn = document.getElementById('confirm-ok-btn');
+  btn.textContent = btnTxt;
+  btn.className   = `btn ${btnCls}`;
+  openModal('modal-confirm');
+}
+function confirmOk() {
+  closeModal('modal-confirm');
+  if (_confirmCallback) { _confirmCallback(); _confirmCallback = null; }
+}
+
+// ── SESSÃO COM EXPIRAÇÃO (8 horas) ──
+const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+function isSessionValid(sess) {
+  if (!sess) return false;
+  if (!sess.loginAt) return true; // retrocompatível com sessões antigas
+  return Date.now() - sess.loginAt < SESSION_TTL_MS;
+}
 let reportPeriod   = 'month';
 let aprovFilter    = 'pending';
 let pendingDecision = null; // { expId, action }
@@ -34,11 +92,17 @@ document.addEventListener('DOMContentLoaded', () => {
     Notification.requestPermission();
   }
 
-  // Check existing session
+  // Inicializar dark mode
+  initDarkMode();
+
+  // Check existing session (com verificação de expiração)
   const sess = DB.getSession();
-  if (sess) {
+  if (sess && isSessionValid(sess)) {
     const u = DB.getUser(sess.userId);
     if (u) { loginAs(u); return; }
+  } else if (sess && !isSessionValid(sess)) {
+    DB.clearSession();
+    // sessão expirou silenciosamente
   }
   showScreen('screen-auth');
   showView('view-login');
@@ -206,13 +270,31 @@ function toggleUserMenu() {
   document.getElementById('user-menu')?.classList.toggle('hidden');
 }
 
-function doLogin() {
+async function doLogin() {
   const email = document.getElementById('login-email').value.trim();
   const pass  = document.getElementById('login-pass').value;
   if (!email || !pass) { showToast('Preencha email e palavra-passe', 'error'); return; }
   const user = DB.findUserByEmail(email);
-  if (!user || user.password !== pass) { showToast('Email ou palavra-passe incorretos', 'error'); return; }
-  DB.setSession({ userId: user.id });
+  if (!user) { showToast('Email ou palavra-passe incorretos', 'error'); return; }
+
+  const hashed = await hashPassword(pass);
+  let ok = false;
+  if (isHashed(user.password)) {
+    ok = user.password === hashed;
+  } else {
+    // Migração: password em texto simples → actualizar para hash
+    if (user.password === pass) {
+      user.password = hashed;
+      DB.saveUser(user);
+      ok = true;
+    }
+  }
+  if (!ok) { showToast('Email ou palavra-passe incorretos', 'error'); return; }
+
+  // Registar último login
+  user.lastLogin = new Date().toISOString();
+  DB.saveUser(user);
+  DB.setSession({ userId: user.id, loginAt: Date.now() });
   loginAs(user);
 }
 
@@ -327,13 +409,16 @@ function regPrevStep() {
   document.getElementById('step-dot-1')?.classList.remove('done');
   document.getElementById('step-dot-1')?.classList.add('active');
 }
-function doRegister() {
+async function doRegister() {
   const name  = document.getElementById('reg-name').value.trim();
   const email = document.getElementById('reg-email').value.trim();
   const pass  = document.getElementById('reg-pass').value;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!name || !email || !pass) { showToast('Preencha todos os campos', 'error'); return; }
+  if (!emailRegex.test(email))  { showToast('Endereço de email inválido', 'error'); return; }
   if (pass.length < 6)          { showToast('Palavra-passe: mínimo 6 caracteres', 'error'); return; }
   if (DB.findUserByEmail(email)) { showToast('Email já registado', 'error'); return; }
+  const hashedPass = await hashPassword(pass);
 
   const types = [];
   if (document.getElementById('act-proc')?.checked)  types.push('procurement');
@@ -359,10 +444,11 @@ function doRegister() {
 
   const user = DB.saveUser({
     id: DB.uid(), companyId: company.id,
-    name, email, password: pass, role: 'admin',
+    name, email, password: hashedPass, role: 'admin',
+    lastLogin: new Date().toISOString(),
   });
 
-  DB.setSession({ userId: user.id });
+  DB.setSession({ userId: user.id, loginAt: Date.now() });
   showToast('Empresa registada! 🎉', 'success');
   loginAs(user);
 }
@@ -935,12 +1021,15 @@ function openExpenseDetail(id) {
   let actions = '';
   if (exp.status === 'pending' && canApprove) {
     actions = `<button class="btn btn-success" onclick="openDecision('${id}','approve')">✅ Aprovar</button>
-               <button class="btn btn-danger"  onclick="openDecision('${id}','reject')">❌ Rejeitar</button>`;
+               <button class="btn btn-danger"  onclick="openDecision('${id}','reject')">❌ Rejeitar</button>
+               <button class="btn btn-outline btn-sm" onclick="duplicateExpense('${id}')">📋 Duplicar</button>`;
   } else if (exp.status === 'draft' && exp.userId === currentUser.id) {
     actions = `<button class="btn btn-primary" onclick="sendDraftExpense('${id}')">📤 Enviar</button>
+               <button class="btn btn-outline btn-sm" onclick="duplicateExpense('${id}')">📋 Duplicar</button>
                <button class="btn btn-danger"  onclick="deleteExpense('${id}')">🗑️ Eliminar</button>`;
   } else {
-    actions = `<button class="btn btn-outline btn-full" onclick="closeModal('modal-expense')">Fechar</button>`;
+    actions = `<button class="btn btn-outline" onclick="duplicateExpense('${id}')">📋 Duplicar como rascunho</button>
+               <button class="btn btn-outline btn-full" onclick="closeModal('modal-expense')">Fechar</button>`;
   }
   document.getElementById('modal-exp-actions').innerHTML = actions;
 
@@ -1079,6 +1168,28 @@ function deleteExpense(id) {
   showToast('Despesa eliminada', 'info');
   renderExpenseList();
   updateBadges();
+}
+function duplicateExpense(id) {
+  const exp = DB.getExpense(id);
+  if (!exp) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const copy = {
+    ...exp,
+    id: DB.uid(),
+    status: 'draft',
+    approvals: [],
+    submittedAt: null,
+    data: today,
+    dataInicio: today,
+    userId: currentUser.id,
+    _history: [],
+    name: (exp.name ? exp.name + ' (cópia)' : 'Cópia'),
+  };
+  delete copy.decisionAt; delete copy.decidedBy; delete copy.decisionComment;
+  DB.saveExpense(copy);
+  closeModal('modal-expense');
+  showToast('Despesa duplicada como rascunho 📋', 'success');
+  renderExpenseList();
 }
 function sendDraftExpense(id) {
   const exp = DB.getExpense(id);
@@ -1612,21 +1723,120 @@ function renderAprovacoes() {
   if (aprovFilter !== 'all') list = list.filter(e => e.status === aprovFilter);
   list.sort((a,b) => (b.submittedAt||b.data||'').localeCompare(a.submittedAt||a.data||''));
 
+  // Filtrar apenas as que o utilizador actual pode aprovar (para batch)
+  const approvable = list.filter(e => canCurrentUserApproveExpense(e));
+
   const container = document.getElementById('aprov-list');
-  container.innerHTML = list.length === 0
-    ? '<p class="empty-state">Nenhuma despesa encontrada.</p>'
-    : `<div class="expense-list">${list.map(e => expenseItemHTML(e, true)).join('')}</div>`;
+  if (list.length === 0) {
+    container.innerHTML = '<p class="empty-state">Nenhuma despesa encontrada.</p>';
+    return;
+  }
+
+  // Barra de aprovação em lote (só se houver pendentes que o user pode aprovar)
+  let batchBar = '';
+  if (approvable.length > 0) {
+    batchBar = `
+    <div class="batch-bar" id="batch-bar">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="batch-select-all" onchange="batchSelectAll(this.checked)"/>
+        <span style="font-size:13px;font-weight:500">Seleccionar todas (${approvable.length})</span>
+      </label>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn btn-success btn-sm" onclick="batchApprove()">✅ Aprovar seleccionadas</button>
+        <button class="btn btn-danger btn-sm"  onclick="batchRejectPrompt()">❌ Rejeitar seleccionadas</button>
+      </div>
+    </div>`;
+  }
+
+  container.innerHTML = batchBar + `<div class="expense-list" id="aprov-expense-list">
+    ${list.map(e => {
+      const canApprove = canCurrentUserApproveExpense(e);
+      const chk = canApprove ? `<input type="checkbox" class="batch-chk" data-id="${e.id}" style="margin-right:8px;width:16px;height:16px;cursor:pointer" onclick="event.stopPropagation()"/>` : '';
+      return `<div style="display:flex;align-items:center">${chk}<div style="flex:1">${expenseItemHTML(e, true)}</div></div>`;
+    }).join('')}
+  </div>`;
+}
+
+function batchSelectAll(checked) {
+  document.querySelectorAll('.batch-chk').forEach(c => { c.checked = checked; });
+}
+
+function _getBatchSelected() {
+  return [...document.querySelectorAll('.batch-chk:checked')].map(c => c.dataset.id);
+}
+
+function batchApprove() {
+  const ids = _getBatchSelected();
+  if (ids.length === 0) { showToast('Seleccione pelo menos uma despesa', 'error'); return; }
+  showConfirm(`Aprovar ${ids.length} despesa${ids.length>1?'s':''}?`, () => {
+    const today = new Date().toISOString().slice(0, 10);
+    let approved = 0;
+    ids.forEach(id => {
+      const exp = DB.getExpense(id);
+      if (!exp || !canCurrentUserApproveExpense(exp)) return;
+      const comment = 'Aprovação em lote';
+      if (!exp.approvals || exp.approvals.length === 0) {
+        exp.status = 'approved';
+      } else {
+        const pendingLevel = exp.approvals.find(a => a.status === 'pending');
+        if (!pendingLevel) return;
+        pendingLevel.status = 'approved'; pendingLevel.userId = currentUser.id;
+        pendingLevel.comment = comment; pendingLevel.date = today;
+        const nextLevel = exp.approvals.find(a => a.status === 'waiting');
+        if (nextLevel) { nextLevel.status = 'pending'; }
+        else { exp.status = 'approved'; notifyExpenseOwner(exp, 'approved'); }
+      }
+      _addHistory(exp, 'approved', comment);
+      DB.saveExpense(exp);
+      approved++;
+    });
+    showToast(`${approved} despesa${approved>1?'s':''} aprovada${approved>1?'s':''}! ✅`, 'success');
+    updateBadges(); renderAprovacoes();
+  }, { title: 'Aprovação em Lote', icon: '✅', btn: 'Aprovar Todas', danger: false });
+}
+
+function batchRejectPrompt() {
+  const ids = _getBatchSelected();
+  if (ids.length === 0) { showToast('Seleccione pelo menos uma despesa', 'error'); return; }
+  const comment = prompt(`Motivo da rejeição (${ids.length} despesa${ids.length>1?'s':''}):`);
+  if (comment === null) return;
+  if (!comment.trim()) { showToast('O motivo é obrigatório', 'error'); return; }
+  const today = new Date().toISOString().slice(0, 10);
+  let rejected = 0;
+  ids.forEach(id => {
+    const exp = DB.getExpense(id);
+    if (!exp || !canCurrentUserApproveExpense(exp)) return;
+    if (exp.approvals && exp.approvals.length > 0) {
+      const pendingLevel = exp.approvals.find(a => a.status === 'pending');
+      if (pendingLevel) { pendingLevel.status = 'rejected'; pendingLevel.userId = currentUser.id; pendingLevel.comment = comment; pendingLevel.date = today; }
+    }
+    exp.status = 'rejected';
+    _addHistory(exp, 'rejected', comment);
+    DB.saveExpense(exp);
+    notifyExpenseOwner(exp, 'rejected');
+    rejected++;
+  });
+  showToast(`${rejected} despesa${rejected>1?'s':''} rejeitada${rejected>1?'s':''}`, 'error');
+  updateBadges(); renderAprovacoes();
 }
 
 // ── PLANEAMENTO ──
 function renderPlaneamento() {
   if (!currentCompany) return;
   const isFunc = currentUser.role === 'funcionario';
-  // Funcionário vê só os seus planos; gestores vêem todos
+  const isSup  = isSupervisorRole(currentUser.role);
+  // Funcionário vê só os seus; supervisor vê os da equipa; gestores/admin vêem todos
   const allPlans = DB.getPlansByCompany(currentCompany.id);
   let plans = isFunc
     ? allPlans.filter(p => p.createdBy === currentUser.id)
-    : allPlans;
+    : isSup
+      ? allPlans.filter(p => {
+          const teamIds = DB.getUsersByCompany(currentCompany.id)
+            .filter(u => u.supervisorId === currentUser.id).map(u => u.id);
+          teamIds.push(currentUser.id);
+          return teamIds.includes(p.createdBy);
+        })
+      : allPlans;
 
   // Aplicar filtros (managers)
   if (!isFunc) {
@@ -1722,9 +1932,10 @@ function changePlanStatus(id, newStatus) {
 }
 
 function deletePlan(id) {
-  if (!confirm('Eliminar esta atividade planeada?')) return;
-  const plans = DB.getPlans().filter(p => p.id !== id);
-  DB._set(DB.KEYS.PLANS, plans);
+  showConfirm('Eliminar esta atividade planeada? Esta acção não pode ser desfeita.', () => _doDeletePlan(id), { title: 'Eliminar Plano', icon: '🗑️', btn: 'Eliminar' });
+}
+function _doDeletePlan(id) {
+  DB.deletePlan(id);
   renderPlaneamento();
   showToast('Atividade eliminada', 'info');
 }
@@ -2487,10 +2698,11 @@ function saveFornecedorModal() {
 }
 
 function deleteFornecedorPage(id) {
-  if (!confirm('Remover este fornecedor?')) return;
-  DB.deleteFornecedor(id);
-  renderFornecedores();
-  showToast('Fornecedor removido', 'info');
+  showConfirm('Remover este fornecedor? Esta acção não pode ser desfeita.', () => {
+    DB.deleteFornecedor(id);
+    renderFornecedores();
+    showToast('Fornecedor removido', 'info');
+  }, { title: 'Remover Fornecedor', icon: '🗑️', btn: 'Remover' });
 }
 
 // ── Fornecedor inline no formulário de campo ──
@@ -2858,6 +3070,68 @@ function renderNotificacoes() {
 }
 
 // ── CONFIG PAGE ──
+// ── BACKUP / RESTORE ──
+function exportBackup() {
+  if (!currentCompany) return;
+  const data = {
+    version: '2.1',
+    exportedAt: new Date().toISOString(),
+    company: currentCompany,
+    users: DB.getUsersByCompany(currentCompany.id),
+    expenses: DB.getExpensesByCompany(currentCompany.id),
+    plans: DB.getPlansByCompany(currentCompany.id),
+    advances: DB.getAdvancesByCompany(currentCompany.id),
+    fornecedores: DB.getFornecedoresByCompany(currentCompany.id),
+    notifications: DB.getNotifsByUser(currentUser.id),
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `SGDC_backup_${currentCompany.name.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  showToast('Backup exportado! 📥', 'success');
+}
+
+function importBackup(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.company || !data.users) { showToast('Ficheiro inválido', 'error'); return; }
+      showConfirm(
+        `Importar dados de "${data.company.name}"? Os dados actuais da empresa serão substituídos.`,
+        () => {
+          // Guardar empresa
+          DB.saveCompany(data.company);
+          // Guardar utilizadores
+          (data.users || []).forEach(u => DB.saveUser(u));
+          // Guardar despesas
+          (data.expenses || []).forEach(exp => DB.saveExpense(exp));
+          // Guardar planos
+          (data.plans || []).forEach(p => DB.savePlan(p));
+          // Guardar adiantamentos
+          (data.advances || []).forEach(a => DB.saveAdvance(a));
+          // Guardar fornecedores
+          (data.fornecedores || []).forEach(f => DB.saveFornecedor(f));
+          showToast('Dados importados com sucesso! ✅', 'success');
+          // Re-carregar sessão se empresa corresponder
+          if (currentCompany && data.company.id === currentCompany.id) {
+            currentCompany = data.company;
+            showPage('page-dashboard');
+          }
+        },
+        { title: 'Importar Backup', icon: '📤', btn: 'Importar', danger: false }
+      );
+    } catch { showToast('Erro ao ler ficheiro JSON', 'error'); }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
 function renderConfig() {
   if (!currentCompany || !currentUser) return;
   if (currentUser.role !== 'admin' && currentUser.role !== 'gestor') {
@@ -3210,14 +3484,16 @@ function editUser(id) {
 
 function deleteUser(id) {
   const u = DB.getUser(id);
-  if (!u || !confirm(`Remover o utilizador "${u.name}"? Esta ação não pode ser desfeita.`)) return;
-  const users = DB.getUsers().filter(x => x.id !== id);
-  DB._set(DB.KEYS.USERS, users);
-  renderUtilizadores();
-  showToast('Utilizador removido', 'info');
+  if (!u) return;
+  showConfirm(`Remover "${escHtml(u.name)}"? As suas despesas e planos também serão eliminados.`, () => {
+    DB.deleteUser(id);
+    renderUtilizadores();
+    updateBadges();
+    showToast('Utilizador e dados associados removidos', 'info');
+  }, { title: 'Remover Utilizador', icon: '👤', btn: 'Remover' });
 }
 
-function createUser() {
+async function createUser() {
   const name       = document.getElementById('new-user-name').value.trim();
   const email      = document.getElementById('new-user-email').value.trim();
   const pass       = document.getElementById('new-user-pass').value;
@@ -3225,8 +3501,10 @@ function createUser() {
   const supervisorId = document.getElementById('new-user-supervisor')?.value || '';
   const modal      = document.getElementById('modal-user');
   const editId     = modal?._editId || null;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   if (!name || !email) { showToast('Preencha nome e email', 'error'); return; }
+  if (!emailRegex.test(email)) { showToast('Endereço de email inválido', 'error'); return; }
 
   if (editId) {
     // Editing existing user
@@ -3234,19 +3512,20 @@ function createUser() {
     if (!u) return;
     u.name = name; u.email = email; u.role = role;
     u.supervisorId = supervisorId || null;
-    if (pass && pass.length >= 6) u.password = pass;
+    if (pass && pass.length >= 6) u.password = await hashPassword(pass);
     else if (pass && pass.length < 6) { showToast('Palavra-passe: mínimo 6 caracteres', 'error'); return; }
     DB.saveUser(u);
     if (modal) modal._editId = null;
     closeModal('modal-user');
-    showToast(`Utilizador ${name} atualizado! ✓`, 'success');
+    showToast(`Utilizador ${escHtml(name)} atualizado! ✓`, 'success');
   } else {
     // New user
     if (!pass) { showToast('Preencha a palavra-passe', 'error'); return; }
     if (pass.length < 6) { showToast('Palavra-passe: mínimo 6 caracteres', 'error'); return; }
     const existing = DB.findUserByEmail(email);
     if (existing) { showToast('Email já registado', 'error'); return; }
-    DB.saveUser({ id: DB.uid(), companyId: currentCompany.id, name, email, password: pass, role, supervisorId: supervisorId || null });
+    const hashedPass = await hashPassword(pass);
+    DB.saveUser({ id: DB.uid(), companyId: currentCompany.id, name, email, password: hashedPass, role, supervisorId: supervisorId || null });
     closeModal('modal-user');
     showToast(`Utilizador ${name} criado! 👤`, 'success');
   }

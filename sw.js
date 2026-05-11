@@ -3,16 +3,16 @@
    Permite uso offline e instalação como PWA
 ═══════════════════════════════════════════════ */
 
-const CACHE_NAME = 'sgdc-v2.0';
+const CACHE_NAME = 'sgdc-v2.1';
 const ASSETS = [
   './',
   './index.html',
-  './css/style.css',
-  './js/data.js',
-  './js/reports.js',
-  './js/gps.js',
-  './js/fraud.js',
-  './js/app.js',
+  './style.css',
+  './data.js',
+  './reports.js',
+  './gps.js',
+  './fraud.js',
+  './app.js',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
